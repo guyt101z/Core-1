@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,17 +21,27 @@ namespace MikoPBX\Core\System\Configs;
 
 
 use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\System;
 use MikoPBX\Core\System\Util;
 use Phalcon\Di;
 use Phalcon\Di\Injectable;
 
+/**
+ * Class PHPConf
+ *
+ * Represents the PHP configuration.
+ *
+ * @package MikoPBX\Core\System\Configs
+ */
 class PHPConf extends Injectable
 {
 
     /**
-     * Relocate PHP error log to storage mount
+     * Relocates PHP error log to the storage mount.
+     *
+     * @return void
      */
     public static function setupLog(): void
     {
@@ -48,8 +58,9 @@ class PHPConf extends Injectable
 
 
     /**
-     * Returns php error log filepath
-     * @return string
+     * Returns the PHP error log file path.
+     *
+     * @return string The log file path.
      */
     public static function getLogFile(): string
     {
@@ -59,13 +70,15 @@ class PHPConf extends Injectable
     }
 
     /**
-     * Rotate php error log
+     * Rotates the PHP error log.
+     *
+     * @return void
      */
-    public static function rotateLog(): void
+    public static function logRotate(): void
     {
         $logrotatePath = Util::which('logrotate');
 
-        $max_size    = 2;
+        $max_size    = 10;
         $f_name      = self::getLogFile();
         $text_config = $f_name . " {
     nocreate
@@ -80,7 +93,7 @@ class PHPConf extends Injectable
     postrotate
     endscript
 }";
-        // TODO::Доделать рестарт PHP-FPM после обновление лога
+        // TODO::Add restart PHP-FPM after rotation
         $di     = Di::getDefault();
         if ($di !== null){
             $varEtcDir = $di->getConfig()->path('core.varEtcDir');
@@ -99,11 +112,13 @@ class PHPConf extends Injectable
     }
 
     /**
-     * Setup timezone for PHP
+     * Sets up the timezone for PHP.
+     *
+     * @return void
      */
     public static function phpTimeZoneConfigure(): void
     {
-        $timezone      = PbxSettings::getValueByKey('PBXTimezone');
+        $timezone      = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_TIMEZONE);
         date_default_timezone_set($timezone);
         if (file_exists('/etc/TZ')) {
             $catPath = Util::which('cat');
@@ -115,15 +130,19 @@ class PHPConf extends Injectable
     }
 
     /**
-     *   Restart php-fpm
-     **/
+     * Restarts php-fpm.
+     *
+     * @return void
+     */
     public static function reStart(): void
     {
         $phpFPMPath = Util::which('php-fpm');
-        // Отправляем запрос на graceful shutdown;
+
+        // Send graceful shutdown signal
         Processes::mwExec('kill -SIGQUIT "$(cat /var/run/php-fpm.pid)"');
         usleep(100000);
-        // Принудительно завершаем.
+
+        // Forcefully terminate
         Processes::killByName('php-fpm');
         Processes::mwExec("{$phpFPMPath} -c /etc/php.ini");
     }

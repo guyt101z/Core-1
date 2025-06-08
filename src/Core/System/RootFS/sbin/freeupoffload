@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# MikoPBX - free phone system for small business
+# Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+#
+
+# Define the PATH variable and export it to ensure that system commands are available
+PATH=/sbin:/bin
+export PATH
+
+# Check if the shell_functions.sh file exists and source it to import functions defined in it
+if [ -f /sbin/shell_functions.sh ]; then
+. /sbin/shell_functions.sh;
+fi
+
+/bin/touch /tmp/freeoffload;
+
+# Kill the pdnsd process using the function killprocess_by_name
+killprocess_by_name 'pdnsd' -9 0;
+
+# Similarly, kill the crond, nginx, and monitord processes
+killprocess_by_name 'crond' -KILL 0;
+killprocess_by_name 'nginx' -KILL 0;
+killprocess_by_name 'monitord' -KILL 1;
+
+# Kill all processes associated with '/offload' using TERM signal first, then KILL signal
+killprocesses '/offload' -TERM 3;
+killprocesses '/offload' -KILL 0;
+
+# Start of the unmounting process for /offload
+echo " |   - unmounting /offload ...";
+f_umount /offload;
+
+# Start of the unmounting process for /cf
+echo " |   - unmounting /cf...";
+f_umount /cf;
+

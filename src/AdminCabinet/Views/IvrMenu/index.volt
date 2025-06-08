@@ -1,15 +1,16 @@
-{{ link_to("ivr-menu/modify", '<i class="add circle icon"></i> '~t._('iv_AddNewIvrMenu'), "class": "ui blue button", 'id':'add-new-button') }}
-
+{% if isAllowed('save') %}
+    {{ link_to("ivr-menu/modify", '<i class="add circle icon"></i> '~t._('iv_AddNewIvrMenu'), "class": "ui blue button", 'id':'add-new-button') }}
+{% endif %}
     {% for record in ivrmenu %}
         {% if loop.first %}
-            <table class="ui selectable compact table" id="ivr-menu-table">
+            <table class="ui selectable compact unstackable table" id="ivr-menu-table">
             <thead>
             <tr>
                 <th class="centered">{{ t._('iv_Extension') }}</th>
                 <th>{{ t._('iv_Name') }}</th>
                 <th>{{ t._('iv_Actions') }}</th>
-                <th>{{ t._('iv_TimeoutExtension') }}</th>
-                <th>{{ t._('iv_Note') }}</th>
+                <th class="hide-on-mobile">{{ t._('iv_TimeoutExtension') }}</th>
+                <th class="hide-on-mobile">{{ t._('iv_Note') }}</th>
                 <th></th>
             </tr>
             </thead>
@@ -19,22 +20,22 @@
 
         <tr class="menu-row" id="{{ record['uniqid'] }}">
             <td class="centered">{{ record['extension'] }}</td>
-            <td>{{ record['name'] }}</td>
-            <td>
+            <td class="collapsing">{{ record['name'] }}</td>
+            <td class="collapsing">
                 <small>
                     {% for action in record['actions'] %}
                             {{ action['digits'] }} - {{ action['represent'] }}<br>
                     {% endfor %}
                 </small>
             </td>
-            <td>
+            <td class="hide-on-mobile collapsing">
                 <small>
                     {% if record['timeoutExtension'] %}
                         {{ record['timeoutExtension'] }}
                     {% endif %}
                 </small>
             </td>
-            <td>
+            <td class="hide-on-mobile">
                 {% if not (record['description'] is empty) %}
                     <div class="ui basic icon button" data-content="{{ record['description'] }}" data-position="top right"
                          data-variation="wide">

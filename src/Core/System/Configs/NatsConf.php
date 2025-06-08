@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,15 +20,24 @@
 namespace MikoPBX\Core\System\Configs;
 
 
+use MikoPBX\Common\Models\PbxSettingsConstants;
+use MikoPBX\Core\System\Directories;
 use MikoPBX\Core\System\MikoPBXConfig;
-use MikoPBX\Core\System\System;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Core\System\Processes;
-use Phalcon\Di;
 use Phalcon\Di\Injectable;
 
+/**
+ * Class NatsConf
+ *
+ * Represents the Nats configuration.
+ *
+ * @package MikoPBX\Core\System\Configs
+ */
 class NatsConf extends Injectable
 {
+    public const PROC_NAME = 'gnatsd';
+
     private MikoPBXConfig $mikoPBXConfig;
 
     /**
@@ -40,72 +49,27 @@ class NatsConf extends Injectable
     }
 
     /**
-     * Rotates gnats logs
-     */
-    public static function logRotate(): void
-    {
-        $log_dir = System::getLogDir() . '/nats';
-        $gnatsdPath = Util::which('gnatsd');
-        $pid     = Processes::getPidOfProcess($gnatsdPath, 'custom_modules');
-        $max_size = 1;
-        if (empty($pid)) {
-            $natsConf = new self();
-            $natsConf->reStart();
-            sleep(1);
-        }
-        $text_config = "{$log_dir}/gnatsd.log {
-    start 0
-    rotate 9
-    size {$max_size}M
-    maxsize 1M
-    daily
-    missingok
-    notifempty
-    sharedscripts
-    postrotate
-        {$gnatsdPath} -sl reopen=$pid > /dev/null 2> /dev/null
-    endscript
-}";
-
-        $mb10 = $max_size * 1024 * 1024;
-
-        $options = '';
-        if (Util::mFileSize("{$log_dir}/gnatsd.log") > $mb10) {
-            $options = '-f';
-        }
-        $di     = Di::getDefault();
-        if ($di !== null){
-            $varEtcDir = $di->getShared('config')->path('core.varEtcDir');
-        } else {
-            $varEtcDir = '/var/etc';
-        }
-        $path_conf  = $varEtcDir . '/gnatsd_logrotate.conf';
-        file_put_contents($path_conf, $text_config);
-        if (file_exists("{$log_dir}/gnatsd.log")) {
-            $logrotatePath = Util::which('logrotate');
-            Processes::mwExecBg("{$logrotatePath} $options '{$path_conf}' > /dev/null 2> /dev/null");
-        }
-    }
-
-    /**
-     * Restarts gnats server
+     * Restarts the gnats server.
+     *
+     * @return void
      */
     public function reStart(): void
     {
-        $confdir = '/etc/nats';
-        Util::mwMkdir($confdir);
+        $config = $this->getDI()->get('config')->gnats;
 
-        $logdir = System::getLogDir() . '/nats';
-        Util::mwMkdir($logdir);
+        $confDir = '/etc/nats';
+        Util::mwMkdir($confDir);
 
-        $tempDir = $this->di->getShared('config')->path('core.tempDir');
-        $sessionsDir = "{$tempDir}/nats_cache";
+        $logDir = Directories::getDir(Directories::CORE_LOGS_DIR) . '/nats';
+        Util::mwMkdir($logDir);
+
+        $sessionsDir = Directories::getDir(Directories::CORE_TEMP_DIR) . '/nats_cache';
         Util::mwMkdir($sessionsDir);
 
         $pid_file = '/var/run/gnatsd.pid';
         $settings = [
-            'port'             => '4223',
-            'http_port'        => '8223',
+            'port'             => $config->port,
+            'http_port'        => $config->httpPort,
             'debug'            => 'false',
             'trace'            => 'false',
             'logtime'          => 'true',
@@ -114,25 +78,32 @@ class NatsConf extends Injectable
             'max_payload'      => '1000000',
             'max_control_line' => '512',
             'sessions_path'    => $sessionsDir,
-            'log_file'         => "{$logdir}/gnatsd.log",
+            'log_size_limit'   => 10485760, //10Mb
+            'log_file'         => "$logDir/gnatsd.log",
         ];
         $config   = '';
         foreach ($settings as $key => $val) {
-            $config .= "{$key}: {$val} \n";
+            $config .= "$key: $val\n";
         }
-        $conf_file = "{$confdir}/natsd.conf";
+        $conf_file = "$confDir/natsd.conf";
         Util::fileWriteContent($conf_file, $config);
 
-        $lic = $this->mikoPBXConfig->getGeneralSettings('PBXLicense');
-        file_put_contents("{$sessionsDir}/license.key", $lic);
+        $lic = $this->mikoPBXConfig->getGeneralSettings(PbxSettingsConstants::PBX_LICENSE);
+        file_put_contents("$sessionsDir/license.key", $lic);
 
         if (file_exists($pid_file)) {
+            $killAllPath = Util::which('killall');
             $killPath = Util::which('kill');
-            $catPath = Util::which('kill');
-            Processes::mwExec("{$killPath} $({$catPath} {$pid_file})");
+            $catPath = Util::which('cat');
+            Processes::mwExec("$killAllPath safe-".self::PROC_NAME);
+            Processes::mwExec("$killPath $($catPath $pid_file)");
         }
-
-        $gnatsdPath = Util::which('gnatsd');
-        Processes::mwExecBg("{$gnatsdPath} --config {$conf_file}", "{$logdir}/gnats_process.log");
+        $outFile = "$logDir/gnats_process.log";
+        $args = "--config $conf_file";
+        $result = Processes::safeStartDaemon(self::PROC_NAME, $args, 20, 1000000, $outFile);
+        if(!$result){
+            sleep(10);
+            Processes::safeStartDaemon(self::PROC_NAME, $args, 20, 1000000, $outFile);
+        }
     }
 }

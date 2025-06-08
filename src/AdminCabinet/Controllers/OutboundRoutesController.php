@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@ use MikoPBX\Common\Models\{OutgoingRoutingTable, Providers};
 
 class OutboundRoutesController extends BaseController
 {
-
 
     /**
      * Builds the list outgoing routes
@@ -76,12 +75,27 @@ class OutboundRoutesController extends BaseController
      *
      * @param string $id
      */
-    public function modifyAction($id = ''): void
+    public function modifyAction(string $id = ''): void
     {
+        $idIsEmpty = false;
+        if(empty($id)){
+            $idIsEmpty = true;
+            $id = (string)($_GET['copy-source']??'');
+        }
+
         $rule = OutgoingRoutingTable::findFirstByid($id);
         if ($rule === null) {
             $rule = new OutgoingRoutingTable();
             $rule->priority = (int)OutgoingRoutingTable::maximum(['column' => 'priority'])+1;
+        }elseif($idIsEmpty){
+            $oldRule = $rule;
+            $rule = new OutgoingRoutingTable();
+            $rule->priority = (int)OutgoingRoutingTable::maximum(['column' => 'priority'])+1;
+            foreach ($oldRule->toArray() as $key => $value){
+                $rule->writeAttribute($key, $value);
+            }
+            $rule->rulename = '';
+            $rule->id = '';
         }
 
         $providers     = Providers::find();
@@ -100,7 +114,7 @@ class OutboundRoutesController extends BaseController
     }
 
     /**
-     * Сохранение карточки исходящего маршрута
+     * Saves the outgoing routing table data based on the POST data.
      */
     public function saveAction(): void
     {
@@ -144,7 +158,7 @@ class OutboundRoutesController extends BaseController
         $this->view->success = true;
         $this->db->commit();
 
-        // Если это было создание карточки то надо перегрузить страницу с указанием ID
+        // If it was the creation of a new record, reload the page with the specified ID
         if (empty($data['id'])) {
             $this->view->reload = "outbound-routes/modify/{$rule->id}";
         }
@@ -152,11 +166,11 @@ class OutboundRoutesController extends BaseController
 
 
     /**
-     * Удаление исходящего маршрута из базы данных
+     * Deletes an outgoing route from the database.
      *
-     * @param string $id
+     * @param string $id The ID of the outgoing route to delete.
      */
-    public function deleteAction($id = ''): void
+    public function deleteAction(string $id = ''): void
     {
         $rule = OutgoingRoutingTable::findFirstByid($id);
         if ($rule !== null) {
@@ -167,8 +181,9 @@ class OutboundRoutesController extends BaseController
     }
 
     /**
-     * Changes rules priority
+     * Changes the priority of outgoing routes.
      *
+     * This action is typically called asynchronously via a POST request.
      */
     public function changePriorityAction(): void
     {
@@ -190,7 +205,7 @@ class OutboundRoutesController extends BaseController
     }
 
     /**
-     * Sort array by name and state
+     * Sorts an array by name and state.
      *
      * @param $a
      * @param $b

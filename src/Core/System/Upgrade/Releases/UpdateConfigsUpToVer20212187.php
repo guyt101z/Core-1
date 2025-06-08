@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ namespace MikoPBX\Core\System\Upgrade\Releases;
 
 use MikoPBX\Common\Models\FirewallRules;
 use MikoPBX\Core\System\Processes;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\System\Upgrade\UpgradeSystemConfigInterface;
 use MikoPBX\Core\System\Util;
 use Phalcon\Di;
@@ -113,7 +114,7 @@ class UpdateConfigsUpToVer20212187 extends Injectable implements UpgradeSystemCo
             $out = [];
             Processes::mwExec("{$this->findPath} " . $this::OLD_MONITOR_PATH . " -type f", $out);
             if (count($out) !== 0) {
-                Util::sysLogMsg(static::class, 'Error moving old recording dir.');
+                SystemMessages::sysLogMsg(static::class, 'Error moving old recording dir.');
             } else {
                 Processes::mwExec("{$this->rmPath} -rf '{$oldPath}'");
                 Util::createUpdateSymlink($newDir, $oldPath);

@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,112 +19,47 @@
 
 namespace MikoPBX\Core\Asterisk;
 
-use Throwable;
 use MikoPBX\Core\System\{Util};
 use Phalcon\Di;
-use SQLite3;
 
 class AstDB extends Di\Injectable
 {
-    /**
-     * Ссылка на базу данных
-     * @var SQLite3
-     */
-    private SQLite3 $db;
     private AsteriskManager $am;
-    private bool $booting;
 
     /**
      * AstDB constructor.
      */
     public function __construct()
     {
-        $di = Di::getDefault();
-        $this->booting = ($di->getShared('registry')->booting === true);
-
-        if(!$this->booting){
-            Util::echoWithSyslog(' - Start Util::getAstManager'.PHP_EOL);
-            $this->am = Util::getAstManager('off');
-            Util::echoWithSyslog(' - End call Util::getAstManager...'.PHP_EOL);
-        }
-
-        $this->db = new SQLite3($this->getDI()->getShared('config')->path('astDatabase.dbfile'));
-        $this->db->busyTimeout(1000);
-        $this->db->enableExceptions(true);
-        $this->createDb();
+        $this->am = Util::getAstManager('off');
     }
 
     /**
-     * Создать базу данных.
-     */
-    private function createDb(): void
-    {
-        $sql = <<<EOF
-			CREATE TABLE IF NOT EXISTS astdb (
-			    [key] VARCHAR (256),
-			    value VARCHAR (256),
-			    PRIMARY KEY (
-			        [key]
-			    )
-			)
-EOF;
-        try {
-            $this->db->exec('PRAGMA journal_mode=WAL;');
-            $this->db->exec($sql);
-        } catch (Throwable $e) {
-            $this->closeDb();
-        }
-    }
-
-    /**
-     * Закрыть соединение с базой данных.
-     */
-    public function closeDb(): void
-    {
-        if ($this->db === null) {
-            return;
-        }
-
-        $this->db->close();
-    }
-
-    /**
-     * Поместить значение в базу данных.
+     * Put a value into the database.
      *
-     * @param $family
-     * @param $key
-     * @param $value
+     * @param string $family The family name.
+     * @param string $key The key name.
+     * @param string $value The value to be stored.
      *
-     * @return bool
+     * @return bool True if the operation is successful, false otherwise.
      */
     public function databasePut($family, $key, $value): bool
     {
         $result = false;
-        if (!$this->booting && ($this->db === null || $this->am->loggedIn()) ) {
+        if ($this->am->loggedIn() ) {
             $result = $this->databasePutAmi($family, $key, $value);
         }
-        if ($result === true || $this->db === null) {
-            return $result;
-        }
-        $sql = "INSERT" . " OR REPLACE INTO astdb (key, value) VALUES ('/{$family}/{$key}', '{$value}')";
-        try {
-            $result = $this->db->exec($sql);
-        } catch (Throwable $e) {
-            $this->closeDb();
-            $this->databasePut($family, $key, $value);
-        }
-
         return $result;
     }
 
     /**
-     * Поместить значение в базу данных через AMI.
+     * Put a value into the database using AMI.
      *
-     * @param $family
-     * @param $key
-     * @param $value
+     * @param string $family The family name.
+     * @param string $key The key name.
+     * @param string $value The value to be stored.
      *
-     * @return bool
+     * @return bool True if the operation is successful, false otherwise.
      */
     private function databasePutAmi($family, $key, $value): bool
     {

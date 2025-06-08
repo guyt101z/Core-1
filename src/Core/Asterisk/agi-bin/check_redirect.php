@@ -2,7 +2,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-use MikoPBX\Core\System\{BeanstalkClient, Util};
+use MikoPBX\Core\System\{BeanstalkClient, SystemMessages};
 use MikoPBX\Core\Workers\WorkerCdr;
 use MikoPBX\Core\Asterisk\AGI;
 
@@ -31,7 +31,7 @@ $linkedid   = $agi->get_variable('CHANNEL(linkedid)', true);
 if ($chan === '' && 'ANSWER' === $DIALSTATUS) {
     exit;
 }
-// Обнуляем значение переменной.
+// Reset the value of the variable.
 $agi->set_variable('BLINDTRANSFER', '');
 
 try {
@@ -42,8 +42,8 @@ try {
         'miko_tmp_db' => true,
     ];
     $client  = new BeanstalkClient(WorkerCdr::SELECT_CDR_TUBE);
-    $message = $client->request(json_encode($filter), 2);
-    if ($message !== false) {
+    list($result, $message) = $client->sendRequest(json_encode($filter), 2);
+    if ($result !== false) {
         $res = json_decode($client->getBody(), true);
         if (count($res) === 1) {
             $exten = ($res[0]['src_chan'] === $chan) ? $res[0]['src_num'] : $res[0]['dst_num'];
@@ -52,8 +52,8 @@ try {
             $agi->exec_goto('internal', $exten, '1');
         }
     } else {
-        Util::sysLogMsg('CheckRedirect', "Error get data from queue 'WorkerCdr::SELECT_CDR_TUBE'. ", LOG_ERR);
+        SystemMessages::sysLogMsg('CheckRedirect', "Error get data from queue 'WorkerCdr::SELECT_CDR_TUBE'. ", LOG_ERR);
     }
 } catch (\Throwable $e) {
-    Util::sysLogMsg('CheckRedirect', $e->getMessage(), LOG_ERR);
+    SystemMessages::sysLogMsg('CheckRedirect', $e->getMessage(), LOG_ERR);
 }

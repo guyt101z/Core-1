@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,8 @@ if(!$GLOBALS['BROWSERSTACK_USERNAME']) $GLOBALS['BROWSERSTACK_USERNAME'] = $GLOB
 $GLOBALS['BROWSERSTACK_ACCESS_KEY'] = getenv('BROWSERSTACK_ACCESS_KEY');
 if(!$GLOBALS['BROWSERSTACK_ACCESS_KEY']) $GLOBALS['BROWSERSTACK_ACCESS_KEY'] = $GLOBALS['CONFIG']['key'];
 
+$GLOBALS['BROWSERSTACK_DAEMON_STARTED'] = getenv('BROWSERSTACK_DAEMON_STARTED');
+
 $GLOBALS['SERVER_PBX'] = getenv('SERVER_PBX');
 if(!$GLOBALS['SERVER_PBX']) {
     $GLOBALS['SERVER_PBX']='https://172.16.32.72';
@@ -47,5 +49,7 @@ if(!$GLOBALS['MIKO_LICENSE_KEY']) {
     $GLOBALS['MIKO_LICENSE_KEY']=$GLOBALS['CONFIG']['MIKO_LICENSE_KEY'];
 }
 
+$GLOBALS['bs_local'] = getenv('BROWSERSTACK_LOCAL');
+$GLOBALS['bs_localIdentifier'] = getenv('BROWSERSTACK_LOCAL_IDENTIFIER');
 
 

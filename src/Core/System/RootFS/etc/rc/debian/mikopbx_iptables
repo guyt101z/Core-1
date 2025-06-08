@@ -1,0 +1,116 @@
+#!/bin/bash
+
+#
+# MikoPBX - free phone system for small business
+# Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+#
+
+### BEGIN INIT INFO
+# Provides:          mikopbx_iptables
+# Required-Start:    $networking
+# Required-Stop:     $networking
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: iptables frontend script
+# Description:       iptables-based firewall
+### END INIT INFO
+
+# Check if init-functions file exists, exit if not
+test -f /lib/lsb/init-functions || exit 1
+. /lib/lsb/init-functions
+
+# Description and script information
+DESC="Iptables based firewall (MIKOPBX)"
+NAME=mikopbx_iptables
+SCRIPTNAME=/etc/init.d/mikopbx_iptables
+
+# Function to start the firewall
+do_start(){
+  echo Starting ip-firewall...
+
+  # Check if specific rules file exists, execute it
+  if [ -e /etc/iptables/iptables.mikopbx ]
+  then
+    sh /etc/iptables/iptables.mikopbx;
+  elif [ -e /etc/iptables/iptables.default ]; then
+    /sbin/iptables-restore < /etc/iptables/iptables.default
+    echo Done.
+  else
+    echo Unable to load rules. Make sure file /etc/iptables/iptables.default exists or make default some rules set.
+  fi
+}
+
+# Function to stop the firewall
+do_stop()
+{
+  echo Turning off ip-firewall...
+  /sbin/iptables -F INPUT
+  /sbin/iptables -F OUTPUT
+  /sbin/iptables -F FORWARD
+  /sbin/iptables -P INPUT ACCEPT
+  /sbin/iptables -P OUTPUT ACCEPT
+  /sbin/iptables -P FORWARD ACCEPT
+  echo Done.
+}
+
+# Function to initialize the firewall
+do_init(){
+  echo Initiating...
+
+  # Check if /etc/iptables directory exists, create if not
+  if [ ! -e /etc/iptables ]
+    then
+      echo Directory /etc/iptables not found. Creating...
+      mkdir /etc/iptables
+      echo Done.
+  fi
+
+  # Check if default rules set exists, create if not
+  if [ ! -e /etc/iptables/iptables.default ]
+    then
+      echo Default rules set not found. Creating...
+      /sbin/iptables -F INPUT
+      /sbin/iptables -F OUTPUT
+      /sbin/iptables -F FORWARD
+      /sbin/iptables -P INPUT ACCEPT
+      /sbin/iptables -P OUTPUT ACCEPT
+      /sbin/iptables -P FORWARD ACCEPT
+      /sbin/iptables-save > /etc/iptables/iptables.clean
+      ln -s /etc/iptables/iptables.clean /etc/iptables/iptables.default
+      echo Done.
+  fi
+}
+
+# Initialize firewall
+do_init
+
+
+# Case statement to handle start, stop, and restart commands
+case "$1" in
+    start)
+        do_start
+    ;;
+    stop)
+        do_stop
+    ;;
+    restart)
+        do_stop
+        do_start
+    ;;
+    *)
+        echo Usage: "${SCRIPTNAME} start|stop|restart"
+    ;;
+esac

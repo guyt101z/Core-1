@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,13 @@ namespace MikoPBX\AdminCabinet\Controllers;
 use DateTime;
 use DateTimeZone;
 use MikoPBX\AdminCabinet\Forms\TimeSettingsEditForm;
-use MikoPBX\Common\Models\{PbxSettings};
+use MikoPBX\Common\Models\{PbxSettings, PbxSettingsConstants};
 
 class TimeSettingsController extends BaseController
 {
 
     /**
-     * Форма редактирования и настроек времени на станции
+     * Form for editing and configuring time settings on the station.
      */
     public function modifyAction(): void
     {
@@ -45,23 +45,23 @@ class TimeSettingsController extends BaseController
     }
 
     /**
-     * Массив настроек времени
+     * Get the array of time settings.
      *
-     * @return array
+     * @return array Array of time settings keys.
      */
     private function getTimeSettingsArray(): array
     {
         return [
-            'PBXTimezone',
-            'NTPServer',
-            'PBXManualTimeSettings',
+            PbxSettingsConstants::PBX_TIMEZONE,
+            PbxSettingsConstants::NTP_SERVER,
+            PbxSettingsConstants::PBX_MANUAL_TIME_SETTINGS,
         ];
     }
 
     /**
-     * Генерация массива тайм зон
+     * Generate an array of time zones.
      *
-     * @return array
+     * @return array Array of time zones.
      */
     private function generateTimezoneList(): array
     {
@@ -95,7 +95,8 @@ class TimeSettingsController extends BaseController
         $timezone_list = [];
         foreach ($timezone_offsets as $timezone => $offset) {
             $offset_prefix    = $offset < 0 ? '-' : '+';
-            $offset_formatted = gmdate('H:i', $offset);
+            $absOffset = (int)abs($offset);
+            $offset_formatted = gmdate('H:i', $absOffset);
 
             $pretty_offset = "UTC${offset_prefix}${offset_formatted}";
 
@@ -126,11 +127,11 @@ class TimeSettingsController extends BaseController
             }
 
             switch ($key) {
-                case "PBXManualTimeSettings":
+                case PbxSettingsConstants::PBX_MANUAL_TIME_SETTINGS:
                 case "***ALL CHECK BOXES ABOVE***":
                     $record->value = ($data[$key] === 'on') ? '1' : '0';
                     break;
-                case "NTPServer":
+                case PbxSettingsConstants::NTP_SERVER:
                     $ntp_servers   = preg_split('/\r\n|\r|\n| |,/', $data[$key]);
                     if (is_array($ntp_servers)){
                         $record->value = implode(PHP_EOL, $ntp_servers);
@@ -154,7 +155,6 @@ class TimeSettingsController extends BaseController
 
         $this->flash->success($this->translation->_('ms_SuccessfulSaved'));
         $this->view->success = true;
-        // $this->view->reload  = 'time-settings/modify';
         $this->db->commit();
     }
 }

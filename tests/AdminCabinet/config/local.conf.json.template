@@ -1,26 +1,59 @@
 {
-  "server": "hub-cloud.browserstack.com",
-  "user": "bsuser63039",
-  "key": "hqQXx7KMkEj3yMqoHArr",
-  "forcelocal": true,
-  "capabilities": {
-    "build": "MikoPBXTest",
-    "name": "local_test",
-    "os" : "Windows",
-    "os_version" : "10",
-    "browserName" : "Chrome",
-    "browser_version" : "81.0",
-    "resolution" : "1280x1024",
-    "browserstack.local" : true,
-    "browserstack.selenium_version" : "3.5.2",
-    "browserstack.debug": true,
-    "browserstack.localIdentifier": "mikoPBXLocal",
-    "acceptSslCerts": true,
-    "fixSessionCapabilities": true,
-    "remoteFiles": true
-  },
-	"MIKO_LICENSE_KEY": "",
-  "environments": [{
-    "browser": "chrome"
-  }]
+    "server": "hub-cloud.browserstack.com",
+    "capabilities": {
+        "project": "MikoPBX",
+        "build": "MikoPBXTest",
+        "name": "local_test",
+        "os": "Windows",
+        "resolution": "1680x1050",
+        "acceptSslCerts": true,
+        "acceptInsecureCerts": true,
+        "fixSessionCapabilities": true,
+        "remoteFiles": true,
+        "seleniumVersion": "4.0.0",
+        "browserName": "Chrome",
+        "browserstack": {
+            "networkLogs": true,
+            "networkLogsOptions": {
+                "captureContent": true
+            },
+            "console": "verbose",
+            "local": false,
+            "debug": true,
+            "webdriver": {
+                    "timeout_options": {
+                      "timeout": 15000,
+                       "retry_attempts": 3
+                    },
+                    "keep_alive": true,
+                    "start_process": false
+                  }
+        },
+        "browserstack.chrome": {
+            "extends": "browserstack",
+            "desiredCapabilities": {
+                "browserName": "chrome",
+                "goog:chromeOptions": {
+                    "w3c": true
+                }
+            }
+        }
+    },
+    "MIKO_LICENSE_KEY": "",
+    "environments": [
+        {
+            "browser": "chrome",
+            "browserVersion": "latest",
+            "chromeOptions": {
+                "args": [
+                    "incognito",
+                    "--start-maximized",
+                    "--no-sandbox"
+                ],
+                "perfLoggingPrefs": {
+                    "enableNetwork": false
+                }
+            }
+        }
+    ]
 }

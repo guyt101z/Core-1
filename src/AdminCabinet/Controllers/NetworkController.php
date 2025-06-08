@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,9 @@ namespace MikoPBX\AdminCabinet\Controllers;
 
 use MikoPBX\AdminCabinet\Forms\NetworkEditForm;
 use MikoPBX\Common\Models\LanInterfaces;
+use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
+use MikoPBX\Core\System\Util;
 
 class NetworkController extends BaseController
 {
@@ -37,9 +40,9 @@ class NetworkController extends BaseController
             }
         }
 
-        $template         = new LanInterfaces();
-        $template->id     = 0;
-        $template->dhcp   = '1';
+        $template = new LanInterfaces();
+        $template->id = 0;
+        $template->dhcp = '1';
         $template->vlanid = '4095';
 
         $arrEth[] = $template;
@@ -47,22 +50,34 @@ class NetworkController extends BaseController
         $internetInterface = LanInterfaces::findFirstByInternet('1');
         if ($internetInterface === null) {
             $internetInterface = new LanInterfaces();
-            $internetInterface->id     = 1;
+            $internetInterface->id = 1;
         }
 
         // We will find additional interfaces which we can delete
         $deletableInterfaces = [];
-        $countInterfaces     = LanInterfaces::count(['group' => 'interface']);
+        $countInterfaces = LanInterfaces::count(['group' => 'interface']);
         foreach ($countInterfaces as $record) {
             if ($record->rowcount > 1) {
                 $deletableInterfaces[] = $record->interface;
             }
         }
-        $form                      = new NetworkEditForm($internetInterface, ['eths' => $arrEth]);
-        $this->view->form          = $form;
-        $this->view->eths          = $arrEth;
-        $this->view->deletableEths = $deletableInterfaces;
-        $this->view->submitMode    = null;
+        $form = new NetworkEditForm($internetInterface, ['eths' => $arrEth]);
+
+        $this->view->setVars(
+            [
+                'SIP_PORT' => PbxSettings::getValueByKey(PbxSettingsConstants::SIP_PORT),
+                'EXTERNAL_SIP_PORT' => PbxSettings::getValueByKey(PbxSettingsConstants::EXTERNAL_SIP_PORT),
+                'TLS_PORT' => PbxSettings::getValueByKey(PbxSettingsConstants::TLS_PORT),
+                'EXTERNAL_TLS_PORT' => PbxSettings::getValueByKey(PbxSettingsConstants::EXTERNAL_TLS_PORT),
+                'RTP_PORT_FROM' => PbxSettings::getValueByKey(PbxSettingsConstants::RTP_PORT_FROM),
+                'RTP_PORT_TO' => PbxSettings::getValueByKey(PbxSettingsConstants::RTP_PORT_TO),
+                'form' => $form,
+                'eths' => $arrEth,
+                'deletableEths' => $deletableInterfaces,
+                'isDocker' => Util::isDocker(),
+                'submitMode' => null,
+            ]
+        );
     }
 
     /**
@@ -70,42 +85,28 @@ class NetworkController extends BaseController
      */
     public function saveAction(): void
     {
-        if ( ! $this->request->isPost()) {
+        if (!$this->request->isPost()) {
             return;
         }
 
         $data = $this->request->getPost();
         $this->db->begin();
-        $networkInterfaces = LanInterfaces::find();
 
-        // Update interface settings
-        foreach ($networkInterfaces as $eth) {
-            $this->fillEthStructure($eth, $data);
-            if ($eth->save() === false) {
-                $errors = $eth->getMessages();
-                $this->flash->warning(implode('<br>', $errors));
-                $this->view->success = false;
-                $this->db->rollback();
 
-                return;
-            }
+        list($result, $messages) = $this->saveLanInterfaces($data);
+        if (!$result) {
+            $this->flash->warning(implode('<br>', $messages));
+            $this->view->success = false;
+            $this->db->rollback();
+            return;
         }
 
-        // Save additional interface settings if it exists
-        if ($data['interface_0'] !== '') {
-            $eth     = new LanInterfaces();
-            $eth->id = 0;
-            $this->fillEthStructure($eth, $data);
-            $eth->id = null;
-            $eth->disabled = '0';
-            if ($eth->create() === false) {
-                $errors = $eth->getMessages();
-                $this->flash->warning(implode('<br>', $errors));
-                $this->view->success = false;
-                $this->db->rollback();
-
-                return;
-            }
+        list($result, $messages) = $this->saveNatSettings($data);
+        if (!$result) {
+            $this->flash->warning(implode('<br>', $messages));
+            $this->view->success = false;
+            $this->db->rollback();
+            return;
         }
 
         $this->view->reload = 'network/modify';
@@ -115,19 +116,60 @@ class NetworkController extends BaseController
     }
 
     /**
+     * Saves the LAN interface configurations.
+     *
+     * This method iterates through each existing LAN interface, updates its configuration based on the provided data,
+     * and saves the changes. If a new interface needs to be added (specified by 'interface_0'), it creates and saves this
+     * new interface as well. If any save operation fails, the method returns an array containing `false` and the error messages.
+     *
+     * @param array $data Array containing the interface configurations.
+     *                    Expected to contain interface settings such as IP, mask, etc., and a special key 'interface_0' for new interfaces.
+     * @return array Returns an array with a boolean success flag and an array of error messages if applicable.
+     */
+    private function saveLanInterfaces(array $data): array
+    {
+        $networkInterfaces = LanInterfaces::find();
+
+        // Update interface settings
+        foreach ($networkInterfaces as $eth) {
+            $this->fillEthStructure($eth, $data);
+            if ($eth->save() === false) {
+                $errors = $eth->getMessages();
+                return [false, $errors];
+            }
+        }
+
+        // Save additional interface settings if it exists
+        if ($data['interface_0'] !== '') {
+            $eth = new LanInterfaces();
+            $eth->id = 0;
+            $this->fillEthStructure($eth, $data);
+            $eth->id = null;
+            $eth->disabled = '0';
+            if ($eth->create() === false) {
+                $errors = $eth->getMessages();
+                return [false, $errors];
+            }
+        }
+
+        return [true, []];
+    }
+
+    /**
      * Fills network interface settings
      *
-     * @param $eth
-     * @param $data
+     * @param LanInterfaces $eth
+     * @param array $data post data
      */
-    private function fillEthStructure($eth, $data): void
+    private function fillEthStructure(LanInterfaces $eth, array $data): void
     {
+        $isDocker = Util::isDocker();
         foreach ($eth as $name => $value) {
             $itIsInternetInterfce = $eth->id === $data['internet_interface'];
             switch ($name) {
                 case 'topology':
                     if ($itIsInternetInterfce) {
-                        $eth->$name = ($data['usenat'] === 'on') ? 'private' : 'public';
+                        $eth->$name = ($data['usenat'] === 'on') ? LanInterfaces::TOPOLOGY_PRIVATE : LanInterfaces::TOPOLOGY_PUBLIC;
                     } else {
                         $eth->$name = '';
                     }
@@ -158,6 +200,9 @@ class NetworkController extends BaseController
                 case 'dhcp':
                     if (array_key_exists($name . '_' . $eth->id, $data)) {
                         $eth->$name = ($data['dhcp_' . $eth->id]) === 'on' ? '1' : '0';
+                    }
+                    if ($isDocker) {
+                        $eth->dhcp = '1';
                     }
                     break;
                 case 'internet':
@@ -195,11 +240,48 @@ class NetworkController extends BaseController
     }
 
     /**
+     * Saves the NAT-related settings for external access.
+     *
+     * Iterates through a list of predefined setting keys related to NAT configuration (like external SIP and TLS ports),
+     * and updates these settings with new values from the provided data. If a setting fails to save, the method returns
+     * immediately with an error.
+     *
+     * @param array $data Associative array where keys are setting names and values are the new settings to be saved.
+     * @return array Returns an array with a boolean success flag and, if unsuccessful, an array of error messages.
+     */
+    private function saveNatSettings(array $data): array
+    {
+        $messages = [];
+        foreach ($data as $key => $value) {
+            switch ($key) {
+                case PbxSettingsConstants::AUTO_UPDATE_EXTERNAL_IP:
+                    PbxSettings::setValue($key, $value === 'on' ? '1' : '0', $messages);
+                    break;
+                case PbxSettingsConstants::EXTERNAL_SIP_PORT:
+                    if (empty($value)) {
+                        $value = PbxSettings::getValueByKey(PbxSettingsConstants::SIP_PORT);
+                    }
+                    PbxSettings::setValue($key, trim($value), $messages);
+                    break;
+                case PbxSettingsConstants::EXTERNAL_TLS_PORT:
+                    if (empty($value)) {
+                        $value = PbxSettings::getValueByKey(PbxSettingsConstants::TLS_PORT);
+                    }
+                    PbxSettings::setValue($key, trim($value), $messages);
+                    break;
+                default:
+            }
+        }
+        $result = count($messages) === 0;
+        return [$result, ['error'=>$messages]];
+    }
+
+    /**
      * Delete a lan interface by ID
      *
      * @param string $ethId interface id
      */
-    public function deleteAction($ethId = ''): void
+    public function deleteAction(string $ethId = ''): void
     {
         $eth = LanInterfaces::findFirstById($ethId);
         if ($eth !== null && $eth->delete() === false) {

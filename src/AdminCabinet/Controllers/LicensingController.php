@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,41 +19,26 @@
 
 namespace MikoPBX\AdminCabinet\Controllers;
 
-use MikoPBX\AdminCabinet\Forms\LicensingActivateCouponForm;
-use MikoPBX\AdminCabinet\Forms\LicensingChangeLicenseKeyForm;
-use MikoPBX\AdminCabinet\Forms\LicensingGetKeyForm;
-use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
+use Phalcon\Http\Response;
 
-/**
- * @property \MikoPBX\Service\License license
- */
 class LicensingController extends BaseController
 {
     /**
+     * Old services still use old controller address
      * License key, get new key, activate coupon form
      *
      */
     public function modifyAction(): void
     {
-        if ($this->language === 'ru') {
-            $this->view->modulesExampleImgPath = $this->url->get('assets/img/modules-example-ru.png');
-        } else {
-            $this->view->modulesExampleImgPath = $this->url->get('assets/img/modules-example-en.png');
-        }
+        // Create a response object
+        $response = new Response();
 
-        // License key form
-        $licKey                           = PbxSettings::getValueByKey('PBXLicense');
-        $changeLicenseKeyForm             = new LicensingChangeLicenseKeyForm(null, ['licKey' => $licKey]);
-        $this->view->changeLicenseKeyForm = $changeLicenseKeyForm;
+        // Set the redirect URL with a hash fragment
+        $redirectUrl = 'pbx-extension-modules/index#licensing';
 
-        // Coupon form
-        $activateCouponForm             = new LicensingActivateCouponForm();
-        $this->view->activateCouponForm = $activateCouponForm;
-
-        // Get new license key form
-        $getKeyForm             = new LicensingGetKeyForm();
-        $this->view->getKeyForm = $getKeyForm;
-        $this->view->submitMode = null;
+        // Perform the redirect
+        $response->redirect($redirectUrl)->send();
 
     }
 
@@ -62,7 +47,6 @@ class LicensingController extends BaseController
      */
     public function saveAction()
     {
-        $this->session->remove('PBXLicense');
+        $this->session->remove(PbxSettingsConstants::PBX_LICENSE);
     }
-
 }

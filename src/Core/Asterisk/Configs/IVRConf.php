@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,22 @@ namespace MikoPBX\Core\Asterisk\Configs;
 use MikoPBX\Common\Models\{IvrMenu, IvrMenuActions, Sip, SoundFiles};
 use MikoPBX\Core\System\{Processes, Util};
 
-class IVRConf extends CoreConfigClass
+/**
+ * Class IVRConf
+ *
+ * Represents a configuration class for IVR.
+ *
+ * @package MikoPBX\Core\Asterisk\Configs
+ */
+class IVRConf extends AsteriskConfigClass
 {
+    // The module hook applying priority
+    public int $priority = 560;
 
     /**
-     * Генерация дополнительных контекстов.
+     * Generates the additional contexts.
      *
-     * @return string
+     * @return string The generated contexts.
      */
     public function extensionGenContexts(): string
     {
@@ -42,8 +51,10 @@ class IVRConf extends CoreConfigClass
             }
         }
 
+        // Fetch IVR menus from the database
         $db_data = IvrMenu::find()->toArray();
-        // Генерация внутреннего номерного плана.
+
+        // Generate internal dial plan.
         $conf = '';
         foreach ($db_data as $ivr) {
             /** @var \MikoPBX\Common\Models\SoundFiles $res */
@@ -56,15 +67,18 @@ class IVRConf extends CoreConfigClass
             } else {
                 $audio_message = 'vm-enter-num-to-call';
             }
-            $try_count_ivr = $ivr['number_of_repeat'];
+
+            // Configure IVR extension context.
             $conf          .= "[ivr-{$ivr['extension']}] \n";
             $conf          .= 'exten => s,1,ExecIf($["${CHANNEL(channeltype)}" == "Local"]?Gosub(set_orign_chan,s,1))' . "\n\t";
+            $conf          .= "same => n,Set(NEED_MONITOR=1)\n\t";
             $conf          .= "same => n,Set(APPEXTEN={$ivr['extension']})\n\t";
             $conf          .= 'same => n,Gosub(dial_app,${EXTEN},1)' . "\n\t";
             $conf          .= 'same => n,Answer()' . "\n\t";
             $conf          .= 'same => n,Set(try_count=0);' . "\n\t";
+            $conf          .= 'same => n(ivr_start),ExecIf($[${try_count} > ' . $ivr['number_of_repeat'] . ']?StopMixMonitor())' . "\n\t";
+            $conf          .= 'same => n,GotoIf($[${try_count} > ' . $ivr['number_of_repeat'] . ']?internal,' . $ivr['timeout_extension'] . ',1)' . "\n\t";
             $conf          .= 'same => n,Set(try_count=$[${try_count} + 1])' . "\n\t";
-            $conf          .= 'same => n,GotoIf($[${try_count} > ' . $try_count_ivr . ']?internal,' . $ivr['timeout_extension'] . ',1)' . "\n\t";
             $conf          .= "same => n,Set(TIMEOUT(digit)=2) \n\t";
             $conf          .= "same => n,Background({$audio_message}) \n\t";
             if ($timeout_wait_exten > 0) {
@@ -72,19 +86,25 @@ class IVRConf extends CoreConfigClass
             } else {
                 $conf .= "same => n,Goto(t,1)\n";
             }
+
+            // Fetch IVR menu actions from the database
             $res = IvrMenuActions::find("ivr_menu_id = '{$ivr['uniqid']}'");
-
             foreach ($res as $ext) {
-                $conf .= "exten => {$ext->digits},1,Goto(internal,{$ext->extension},1)\n";
+                $conf .= "exten => {$ext->digits},1,StopMixMonitor()\n";
+                $conf .= "\tsame => n,Goto(internal,{$ext->extension},1)\n";
             }
-            $conf .= "exten => i,1,Goto(s,6)\n";
-            $conf .= "exten => t,1,Goto(s,6)\n";
 
+            // Handle invalid and timeout extensions.
+            $conf .= "exten => i,1,Goto(s,ivr_start)\n";
+            $conf .= "exten => t,1,Goto(s,ivr_start)\n";
+
+            // Add support for entering any internal extension.
             if ($ivr['allow_enter_any_internal_extension'] === '1') {
                 foreach ($arr_lens as $len) {
                     $extension = Util::getExtensionX($len);
                     $conf      .= 'exten => _' . $extension . ',1,ExecIf($["${DIALPLAN_EXISTS(internal,${EXTEN},1)}" == "0"]?Goto(i,1))' . "\n\t";
                     $conf      .= 'same => n,ExecIf($["${PJSIP_ENDPOINT(${EXTEN},auth)}x" == "x"]?Goto(i,1))' . "\n\t";
+                    $conf      .= 'same => n,StopMixMonitor()' . "\n\t";
                     $conf      .= 'same => n,Goto(internal,${EXTEN},1)' . "\n";
                 }
             }
@@ -94,9 +114,9 @@ class IVRConf extends CoreConfigClass
     }
 
     /**
-     * Генерация хинтов.
+     * Generates the hints.
      *
-     * @return string
+     * @return string The generated hints.
      */
     public function extensionGenHints(): string
     {
@@ -110,11 +130,10 @@ class IVRConf extends CoreConfigClass
     }
 
     /**
-     * Получаем длительность файла.
+     * Retrieves the duration of a sound file.
      *
-     * @param $filename
-     *
-     * @return int
+     * @param string $filename The file name.
+     * @return int The duration of the sound file.
      */
     public function getSoundFileDuration($filename)
     {
@@ -139,9 +158,9 @@ class IVRConf extends CoreConfigClass
     }
 
     /**
-     * Возвращает номерной план для internal контекста.
+     * Generates the internal dialplan for IVR.
      *
-     * @return string
+     * @return string The generated internal dialplan.
      */
     public function extensionGenInternal(): string
     {
@@ -156,7 +175,9 @@ class IVRConf extends CoreConfigClass
     }
 
     /**
-     * @return string
+     * Generates the internal transfer dialplan for IVR.
+     *
+     * @return string The generated internal transfer dialplan.
      */
     public function extensionGenInternalTransfer(): string
     {

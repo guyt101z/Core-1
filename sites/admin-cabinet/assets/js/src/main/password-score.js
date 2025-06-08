@@ -1,6 +1,6 @@
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,50 +16,55 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-
+/**
+ * The PasswordScore object is responsible for calculating passwords scores
+ *
+ * @module PasswordScore
+ */
 const PasswordScore = {
-	scorePassword(pass) {
-		let score = 0;
-		if (!pass) {
-			return score;
-		}
 
-		// award every unique letter until 5 repetitions
-		const letters = {};
-		for (let i = 0; i < pass.length; i++) {
-			letters[pass[i]] = (letters[pass[i]] || 0) + 1;
-			score += 5.0 / letters[pass[i]];
-		}
+    /**
+     * Calculates the score for a given password.
+     * @param {string} pass - The password to score.
+     * @returns {number} The password score.
+     */
+    scorePassword(pass) {
+        let score = 0;
+        if (!pass) {
+            return score;
+        }
+        if (pass.length > 5) {
+            score = 2;
+        }
+        const variations = {
+            digits: /\d/.test(pass),
+            lower: /[a-z]/.test(pass),
+            upper: /[A-Z]/.test(pass),
+            nonWords: /\W/.test(pass),
+        };
+        for (const check in variations) {
+            score += (variations[check] === true) ? 2 : 0;
+        }
+        return score * 10;
+    },
 
-		// bonus points for mixing it up
-		const variations = {
-			digits: /\d/.test(pass),
-			lower: /[a-z]/.test(pass),
-			upper: /[A-Z]/.test(pass),
-			nonWords: /\W/.test(pass),
-		};
-
-		let variationCount = 0;
-		for (const check in variations) {
-			variationCount += (variations[check] === true) ? 1 : 0;
-		}
-		score += (variationCount - 1) * 10;
-
-		return parseInt(score, 10);
-	},
-	checkPassStrength(param) {
-		const score = PasswordScore.scorePassword(param.pass);
-		param.bar.progress({
-			percent: Math.min(score, 100),
-			showActivity: false,
-		});
-		param.section.show();
-		// if (score > 80) { return 'strong'; }
-		// if (score > 60) { return 'good'; }
-		// if (score >= 30) { return 'weak'; }
-		return '';
-	},
-
+    /**
+     * Checks the strength of a password and updates the progress bar and section visibility.
+     * @param {object} param - The parameters for checking password strength.
+     * @param {string} param.pass - The password to check.
+     * @param {jQuery} param.bar - The progress bar element.
+     * @param {jQuery} param.section - The section element.
+     * @returns {string} An empty string.
+     */
+    checkPassStrength(param) {
+        const score = PasswordScore.scorePassword(param.pass);
+        param.bar.progress({
+            percent: Math.min(score, 100),
+            showActivity: false,
+        });
+        param.section.show();
+        return '';
+    },
 };
 
 // export default PasswordScore;

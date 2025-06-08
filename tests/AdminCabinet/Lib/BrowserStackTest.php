@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,87 +20,133 @@
 namespace MikoPBX\Tests\AdminCabinet\Lib;
 
 use Facebook\WebDriver\Remote\RemoteWebDriver;
+use GuzzleHttp\Exception\GuzzleException;
 use PHPUnit\Framework\TestCase;
 use BrowserStack\Local as BrowserStackLocal;
 use GuzzleHttp\Client as GuzzleHttpClient;
 
-require 'globals.php';
+require_once 'globals.php';
 
+/**
+ * Class BrowserStackTest
+ * @package MikoPBX\Tests\AdminCabinet\Lib
+ */
 class BrowserStackTest extends TestCase
 {
+    /**
+     * @var RemoteWebDriver
+     */
     protected static RemoteWebDriver $driver;
+
+    /**
+     * @var BrowserStackLocal
+     */
     protected static BrowserStackLocal $bs_local;
+
+    /**
+     * @var bool
+     */
     protected static bool $testResult;
+
+    /**
+     * @var array
+     */
     protected static array $failureConditions;
 
     /**
-     * Before all tests
+     * Set up before all tests
+     *
      * @throws \BrowserStack\LocalException
      */
     public static function setUpBeforeClass(): void
     {
+        // Load the global configuration array
         $CONFIG  = $GLOBALS['CONFIG'];
+
+        // Get the current task ID from an environment variable, or use 0 if the environment variable is not set
         $task_id = getenv('TASK_ID') ? getenv('TASK_ID') : 0;
 
+        // Get the capabilities for the current task from the configuration array
         $caps = $CONFIG['environments'][$task_id];
 
+        // Loop through all the capabilities defined in the configuration array
         foreach ($CONFIG["capabilities"] as $key => $value) {
+            // If the capability is not already set in the current task's capabilities, add it
             if ( ! array_key_exists($key, $caps)) {
                 $caps[$key] = $value;
             }
         }
-        if(array_key_exists("browserstack.local", $caps) && $caps["browserstack.local"])
+
+        // If BrowserStack Local is enabled, start a BrowserStackLocal instance
+        if($GLOBALS['BROWSERSTACK_DAEMON_STARTED']==='false')
         {
             $bs_local_args = [
                 "key" => $GLOBALS['BROWSERSTACK_ACCESS_KEY'],
-                "localIdentifier" => $caps['browserstack.localIdentifier'],
+                "localIdentifier" => "".$GLOBALS['bs_localIdentifier']
             ];
             self::$bs_local = new BrowserStackLocal();
             self::$bs_local->start($bs_local_args);
         }
+        // If BrowserStack Local is not enabled, set the BrowserStack Local capability values to the global variables
+        else {
+            $caps['browserstack.local'] = "".$GLOBALS['bs_local'];
+            $caps['browserstack.localIdentifier']="".$GLOBALS['bs_localIdentifier'];
+        }
 
+        // Set the URL for the BrowserStack WebDriver endpoint
         $url  = "https://" . $GLOBALS['BROWSERSTACK_USERNAME'] . ":" . $GLOBALS['BROWSERSTACK_ACCESS_KEY'] . "@" . $CONFIG['server'] . "/wd/hub";
 
-        $caps['project'] = "MikoPBX";
+        // Set the build capabilities
         $caps['build'] = $GLOBALS['BUILD_NUMBER'];
-        self::$driver = RemoteWebDriver::create($url, $caps);
+
+        // Create a new WebDriver instance with the specified URL and capabilities
+        self::$driver = RemoteWebDriver::create($url, $caps, 120000, 120000);
+
+        // Set the initial test result and failure conditions variables
         self::$testResult = true;
         self::$failureConditions = [];
-
     }
 
+
     /**
-     * Before execute test we set it name to RemoteWebdriver
-     * @throws \GuzzleHttp\Exception\GuzzleException
+     * Set up before each test
+     *
+     * @throws GuzzleException
+     * @throws \Exception
      */
     public function setUp(): void
     {
         parent::setUp();
         $sessionID = self::$driver->getSessionID();
-        $name = $this->getName(false);
+        $name = $this->getName(true);
 
         $client = new GuzzleHttpClient();
         $client->request('PUT', "https://api.browserstack.com/automate/sessions/{$sessionID}.json", [
             'auth' => [$GLOBALS['BROWSERSTACK_USERNAME'], $GLOBALS['BROWSERSTACK_ACCESS_KEY']],
             'json' => ['name' => $name]
         ]);
+
+        // Maximize Browser size
+        self::$driver->manage()->window()->maximize();
+
+        // Go to the index page
+        self::$driver->get($GLOBALS['SERVER_PBX']);
     }
 
     /**
-     * After execute test we will update his status
-     * @throws \GuzzleHttp\Exception\GuzzleException
+     * Tear down after each test
      */
     public function tearDown(): void
     {
         parent::tearDown();
         if ($this->getStatus()!==0){
             self::$testResult = false;
-            self::$failureConditions[] = 'Test: '.$this->getName().' Message:'. $this->getStatusMessage();
+            self::$failureConditions[] = 'Test: '.$this->getName(true).' Message:'. $this->getStatusMessage();
         }
     }
 
     /**
-     * After all tests
+     * Tear down after all tests
      */
     public static function tearDownAfterClass(): void
     {
@@ -116,9 +162,8 @@ class BrowserStackTest extends TestCase
             ]
         ]);
 
-
         self::$driver->quit();
-        if (self::$bs_local) {
+        if (isset(self::$bs_local) && self::$bs_local) {
             self::$bs_local->stop();
         }
     }

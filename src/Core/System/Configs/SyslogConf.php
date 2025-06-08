@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,13 @@ use MikoPBX\Core\System\Util;
 use Phalcon\Di;
 use Phalcon\Di\Injectable;
 
+/**
+ * Class SyslogConf
+ *
+ * Represents the Syslog configuration.
+ *
+ * @package MikoPBX\Core\System\Configs
+ */
 class SyslogConf extends Injectable
 {
     public const CONF_FILE   ='/etc/rsyslog.conf';
@@ -32,7 +39,7 @@ class SyslogConf extends Injectable
     public const SYS_LOG_LINK='/var/log/messages';
 
     /**
-     * Restarts syslog daemon
+     * Restarts syslog daemon.
      */
     public function reStart(): void
     {
@@ -40,56 +47,73 @@ class SyslogConf extends Injectable
         $pidSyslogD = Processes::getPidOfProcess('syslogd', self::PROC_NAME);
         if(!empty($pidSyslogD)){
             $logreadPath = Util::which('logread');
-            Processes::mwExec("$logreadPath >> " . self::SYS_LOG_LINK);
+            Processes::mwExec("$logreadPath  2>/dev/null >> " . self::SYS_LOG_LINK);
+            $oldLogPath = self::SYS_LOG_LINK;
+            if (!is_link($oldLogPath)) {
+                $newLogPath = self::getSyslogFile();
+                $catPath = Util::which('cat');
+                Processes::mwExec("$catPath $oldLogPath >> $newLogPath");
+            }
             Processes::killByName('syslogd');
         }
+
+        RedisConf::generateSyslogConf();
+        CronConf::generateSyslogConf();
+
         Processes::safeStartDaemon(self::PROC_NAME, '-n');
     }
 
     /**
-     * Генерация конфигурационного файла.
+     * Generates the configuration file.
      */
     private function generateConfigFile():void{
-        $pathScript = $this->createRotateScript();
-        $log_file    = self::getSyslogFile();
-        file_put_contents($log_file, '', FILE_APPEND);
-        $conf = ''.PHP_EOL.
+        $pathScriptMessages = self::createRotateScript(basename(self::SYS_LOG_LINK));
+        $log_fileMessages   = self::getSyslogFile();
+
+        file_put_contents($log_fileMessages, '', FILE_APPEND);
+        $conf = PHP_EOL.
                 '$ModLoad imuxsock'.PHP_EOL.
                 'template(name="mikopbx" type="string"'.PHP_EOL.
                 '  string="%TIMESTAMP:::date-rfc3164% %syslogfacility-text%.%syslogseverity-text% %syslogtag% %msg%\n"'."\n".
                 ')'.PHP_EOL.
                 '$ActionFileDefaultTemplate mikopbx'.PHP_EOL.
                 '$IncludeConfig /etc/rsyslog.d/*.conf'.PHP_EOL.
-                // '*.* '.$log_file.PHP_EOL.
+
                 PHP_EOL.
-                '$outchannel log_rotation,'.$log_file.',2621440,'.$pathScript.PHP_EOL
+                '$outchannel log_rotation,'.$log_fileMessages.',10485760,'.$pathScriptMessages.PHP_EOL
                 .'*.* :omfile:$log_rotation'.PHP_EOL;
         Util::fileWriteContent(self::CONF_FILE, $conf);
-        Util::createUpdateSymlink($log_file, self::SYS_LOG_LINK);
+        Util::createUpdateSymlink($log_fileMessages, self::SYS_LOG_LINK);
         Util::mwMkdir('/etc/rsyslog.d');
     }
 
     /**
-     * Returns Syslog file path
+     * Returns the path to the syslog file.
+     * @param string $name
      * @return string
      */
-    public static function getSyslogFile(): string
+    public static function getSyslogFile(string $name = 'messages'): string
     {
         $logDir = System::getLogDir() . '/system';
         Util::mwMkdir($logDir);
-        return "$logDir/messages";
+        $logFileName = $logDir . '/' . $name;
+        if (!file_exists($logFileName)){
+            file_put_contents($logFileName, '');
+        }
+        return "$logFileName";
     }
 
     /**
-     * Скрипт ротации логов.
+     * Creates the log rotation script.
+     * @param string $serviceName
      * @return string
      */
-    public function createRotateScript(): string
+    public static function createRotateScript(string $serviceName): string
     {
-        $mvPath   = Util::which('mv');
+        $mvPath     = Util::which('mv');
         $chmodPath   = Util::which('chmod');
         $di          = Di::getDefault();
-        $logFile     = self::getSyslogFile();
+        $logFile     = self::getSyslogFile($serviceName);
         $textScript  =  '#!/bin/sh'.PHP_EOL.
                         "logName='{$logFile}';".PHP_EOL.
                         'if [ ! -f "$logName" ]; then exit; fi'.PHP_EOL.
@@ -110,7 +134,7 @@ class SyslogConf extends Injectable
         }else{
             $varEtcDir = '/etc';
         }
-        $pathScript   = $varEtcDir . '/'.self::PROC_NAME.'_logrotate.sh';
+        $pathScript   = $varEtcDir . '/'.$serviceName.'_logrotate.sh';
         file_put_contents($pathScript, $textScript);
         Processes::mwExec("$chmodPath +x $pathScript");
 

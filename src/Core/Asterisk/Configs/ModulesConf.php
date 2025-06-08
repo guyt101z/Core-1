@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,10 +21,23 @@ namespace MikoPBX\Core\Asterisk\Configs;
 
 use MikoPBX\Core\System\Util;
 
-class ModulesConf extends CoreConfigClass
+/**
+ * Class ModulesConf
+ *
+ * Represents the configuration class for modules.conf and codecs.conf
+ *
+ * @package MikoPBX\Core\Asterisk\Configs
+ */
+class ModulesConf extends AsteriskConfigClass
 {
+    // The module hook applying priority
+    public int $priority = 1000;
+
     protected string $description = 'modules.conf';
 
+    /**
+     * Generates the configuration for modules.conf and codecs.conf
+     */
     protected function generateConfigProtected(): void
     {
         $conf = "[modules]\n" .
@@ -62,6 +75,7 @@ class ModulesConf extends CoreConfigClass
             'codec_ilbc.so',
             'codec_lpc10.so',
             'codec_silk.so',
+            'codec_g729.so',
 
             'format_ogg_speex.so',
             'format_gsm.so',
@@ -114,11 +128,12 @@ class ModulesConf extends CoreConfigClass
             'func_periodic_hook.so',
             'func_uri.so',
             'func_groupcount.so',
+            'func_export.so',
             'app_mixmonitor.so',
 
-            // Необходимое для работы переадресаций.
+            // Required for call forwarding.
             'bridge_simple.so',
-            // Прочие bridge модули. Один из них необходим для работы парковки.
+            // Other bridge modules. One of them is necessary for parking functionality.
             'bridge_holding.so',
             'bridge_builtin_features.so',
             'bridge_builtin_interval_features.so',
@@ -149,6 +164,7 @@ class ModulesConf extends CoreConfigClass
             'res_pjsip_dialog_info_body_generator.so',
             'res_pjsip_diversion.so',
             'res_pjsip_dtmf_info.so',
+            'res_pjsip_empty_info.so',
             'res_pjsip_endpoint_identifier_anonymous.so',
             'res_pjsip_endpoint_identifier_ip.so',
             'res_pjsip_endpoint_identifier_user.so',
@@ -182,20 +198,31 @@ class ModulesConf extends CoreConfigClass
             'res_pjsip_xpidf_body_generator.so',
             'res_pjsip_dlg_options.so',
             'res_security_log.so',
+
+            'cel_beanstalkd.so',
+            'app_celgenuserevent.so',
+
+            // 'res_hep.so',
+            // 'res_hep_pjsip.so',
+            // 'res_hep_rtcp.so',
         ];
 
+        // Check if specific files exist and add modules accordingly
         if(file_exists('/dev/dahdi/transcode')){
-          $modules[] = 'app_meetme.so';
-          $modules[] = 'chan_dahdi.so';
-          $modules[] = 'res_timing_dahdi.so';
-          $modules[] = 'codec_dahdi.so';
+            $modules[] = 'app_meetme.so';
+            $modules[] = 'chan_dahdi.so';
+            $modules[] = 'res_timing_dahdi.so';
+            $modules[] = 'codec_dahdi.so';
         }
 
         foreach ($modules as $value) {
             $conf .= "load => $value\n";
         }
-        $conf .= $this->hookModulesMethod(CoreConfigClass::GENERATE_MODULES_CONF);
 
+        // Call the hook modules method for generating additional configuration
+        $conf .= $this->hookModulesMethod(AsteriskConfigInterface::GENERATE_MODULES_CONF);
+
+        // Write the configuration content to the file
         Util::fileWriteContent($this->config->path('asterisk.astetcdir') . '/modules.conf', $conf);
         Util::fileWriteContent($this->config->path('asterisk.astetcdir') . '/codecs.conf', '');
     }

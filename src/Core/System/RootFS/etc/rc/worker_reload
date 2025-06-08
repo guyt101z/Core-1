@@ -1,0 +1,83 @@
+#!/bin/sh
+#
+# MikoPBX - free phone system for small business
+# Copyright (C) 2017-2023 Alexey Portnov and Nikolay Beketov
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+#
+
+# Path and basic parameters for the launched application.
+# Service name.
+NAMESAFE=$(/bin/busybox basename "$0");
+PATHTOBIN=$(/bin/busybox which "$(echo "$NAMESAFE" | /bin/busybox sed 's/safe-//g')");
+NAME=$(/bin/busybox basename "$PATHTOBIN");
+ARGS=$@;
+
+# Duration to wait before the next launch.
+SLEEPSECS=1
+PIDFILE="/var/run/${NAMESAFE}.pid";
+
+
+# Function to display messages
+message() {
+	echo "$1" >&2
+	logger -t "$NAME" "$1"
+}
+
+
+# Function to run the binary
+run_bin()
+{
+	while :; do
+    message "Starting $NAME...";
+	  $PATHTOBIN $ARGS;
+		EXITSTATUS="$?"
+
+		message "$NAME ended with exit status $EXITSTATUS"
+		if test "x$EXITSTATUS" = "x0" ; then
+			message "Bin $NAME shutdown normally."
+			sleep 30
+		else
+			message "$NAME died with code $EXITSTATUS."
+		fi
+		message "Automatically restarting $NAME."
+		sleep $SLEEPSECS
+	done;
+}
+
+# Check if another instance of the script is already running
+if [ -f "$PIDFILE" ]; then
+  message "Found another pid file.";
+  resultGrep=$(/bin/busybox ps | /bin/busybox grep "$NAMESAFE" | grep "$(/bin/busybox cat "$PIDFILE")" | /bin/busybox grep -v grep);
+  if [ ! "${resultGrep}x" = 'x' ]; then
+    message "Another process is already running";
+    exit 1;
+  fi;
+fi;
+
+# Save the current process ID in the PID file
+echo $$ > "$PIDFILE";
+message "Starting $NAMESAFE...";
+
+# Check if there is another process running with the same binary path and terminate it
+pidOld=$(/bin/busybox ps | /bin/busybox grep "$(basename "$PATHTOBIN")" | /bin/busybox grep -v "$NAMESAFE" | /bin/busybox grep -v grep | /bin/busybox awk '{ print $1}');
+if [ -n "$pidOld" ]; then
+  message "Completing another process ${PATHTOBIN}"
+  /bin/busybox kill "$pidOld";
+fi;
+# Start running the binary in the background
+run_bin &
+
+# Update the PID of the background process.
+echo $! > "$PIDFILE";

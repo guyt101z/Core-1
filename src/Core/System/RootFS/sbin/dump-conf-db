@@ -1,0 +1,73 @@
+#!/bin/sh
+#
+# MikoPBX - free phone system for small business
+# Copyright © 2017-2022 Alexey Portnov and Nikolay Beketov
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+#
+
+# Extract the media mount point from the configuration file
+confBackupDir="$(/bin/busybox grep "confBackupDir" < /etc/inc/mikopbx-settings.json | /bin/busybox cut -f 4 -d '"')";
+
+# Extract the path to the database from the configuration file
+dbPath="$(/bin/busybox grep "mikopbx.db" < /etc/inc/mikopbx-settings.json | /bin/busybox cut -f 4 -d '"')";
+
+# Define the backup directory path
+backupDir="${confBackupDir}"
+
+# Catalog for daily backups
+backupDirDay="${confBackupDir}/day"
+
+# Ensure the backup directory exists
+mkdir -p "$backupDirDay";
+
+# A file for temporary storage of a backup copy
+tmpBackup="$backupDir/tmp.dmp";
+/usr/bin/sqlite3 "$dbPath" .dump > "$tmpBackup";
+
+# Calculate the MD5 checksum of the database dump
+md5="$(/bin/busybox cat "$tmpBackup" | /bin/gzip -c | /usr/bin/md5sum | cut -f 1 -d ' ')" ;
+
+# Check if a backup with the same MD5 checksum already exists
+/usr/bin/md5sum "$backupDir"/*_mikopbx.db.gz | /bin/busybox grep "$md5"> /dev/null 2> /dev/null
+result="$?"
+
+# If no matching backup is found, create a new backup
+if [ "$result" = "1" ];then
+  /bin/busybox cat "$tmpBackup"  | /bin/gzip -c > "$backupDir/$(date '+%Y-%m-%d_h%H_m%M_s%S')_mikopbx.db.gz"
+fi;
+
+# Remove the oldest backups, keeping only the 5 most recent ones
+(
+  cd "$backupDir" || exit;
+  /bin/busybox ls -1tr | grep 'db.gz' | /bin/busybox head -n-5 | /bin/xargs /bin/busybox rm 2> /dev/null
+)
+
+# Daily backup
+# Check if a backup with the same MD5 checksum already exists
+/usr/bin/md5sum "$backupDirDay"/*_mikopbx.db.gz | /bin/busybox grep "$md5"> /dev/null 2> /dev/null
+result="$?"
+
+# If no matching backup is found, create a new backup
+if [ "$result" = "1" ];then
+  /bin/busybox cat "$tmpBackup" | /bin/gzip -c > "$backupDirDay/$(date '+%Y-%m-%d')_mikopbx.db.gz"
+fi;
+
+# Remove the oldest backups, keeping only the 5 most recent ones
+(
+  cd "$backupDirDay" || exit;
+  /bin/busybox ls -1tr | /bin/busybox head -n-7 | /bin/xargs /bin/busybox rm 2> /dev/null
+)
+
+rm -rf "$tmpBackup";

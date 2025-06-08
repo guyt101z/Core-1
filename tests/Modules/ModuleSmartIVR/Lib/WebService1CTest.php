@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 namespace MikoPBX\Tests\Modules\ModuleSmartIVR\Lib;
 
 use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use Modules\ModuleSmartIVR\Lib\WebService1C;
 use MikoPBX\Tests\Unit\AbstractUnitTest;
 use Modules\ModuleSmartIVR\Models\ModuleSmartIVR;
@@ -35,7 +36,7 @@ class WebService1CTest extends AbstractUnitTest
         $this->module_extension   = $settings->extension;
         $this->timeout_extension  = $settings->timeout_extension;
         $this->failover_extension = $settings->failover_extension;
-        $this->internalExtLength  = PbxSettings::getValueByKey('PBXInternalExtensionLength');
+        $this->internalExtLength  = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_INTERNAL_EXTENSION_LENGTH);
         // Количество повторов меню перед переводом на резервный номер
         $this->count_of_repeat_ivr = 3;
         if (isset($settings->number_of_repeat)

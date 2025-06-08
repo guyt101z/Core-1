@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ use MikoPBX\Common\Models\DialplanApplications;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\FirewallRules;
 use MikoPBX\Common\Models\NetworkFilters;
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\PBX;
 use MikoPBX\Core\System\Processes;
@@ -72,12 +73,12 @@ class UpdateConfigsUpToVer2020162 extends Injectable implements UpgradeSystemCon
         PBX::checkCodec('ilbc', 'iLBC', 'audio');
         PBX::checkCodec('opus', 'Opus Codec', 'audio');
 
-        $PrivateKey = $this->mikoPBXConfig->getGeneralSettings('WEBHTTPSPrivateKey');
-        $PublicKey  = $this->mikoPBXConfig->getGeneralSettings('WEBHTTPSPublicKey');
+        $PrivateKey = $this->mikoPBXConfig->getGeneralSettings(PbxSettingsConstants::WEB_HTTPS_PRIVATE_KEY);
+        $PublicKey  = $this->mikoPBXConfig->getGeneralSettings(PbxSettingsConstants::WEB_HTTPS_PUBLIC_KEY);
         if (empty($PrivateKey) || empty($PublicKey)) {
             $certs = Util::generateSslCert();
-            $this->mikoPBXConfig->setGeneralSettings('WEBHTTPSPrivateKey', $certs['PrivateKey']);
-            $this->mikoPBXConfig->setGeneralSettings('WEBHTTPSPublicKey', $certs['PublicKey']);
+            $this->mikoPBXConfig->setGeneralSettings(PbxSettingsConstants::WEB_HTTPS_PRIVATE_KEY, $certs['PrivateKey']);
+            $this->mikoPBXConfig->setGeneralSettings(PbxSettingsConstants::WEB_HTTPS_PUBLIC_KEY, $certs['PublicKey']);
         }
 
 

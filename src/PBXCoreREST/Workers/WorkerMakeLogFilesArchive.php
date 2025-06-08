@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,37 +22,57 @@ namespace MikoPBX\PBXCoreREST\Workers;
 require_once 'Globals.php';
 
 use MikoPBX\Core\System\Processes;
+use MikoPBX\Core\System\Storage;
 use MikoPBX\Core\System\System;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\Workers\WorkerBase;
 use MikoPBX\Core\System\Util;
-use MikoPBX\PBXCoreREST\Lib\SysinfoManagementProcessor;
-use Throwable;
+use MikoPBX\PBXCoreREST\Lib\Sysinfo\GetInfoAction;
+use ZipArchive;
 
+
+/**
+ * The WorkerMakeLogFilesArchive class is responsible for archiving log files.
+ *
+ * @package MikoPBX\PBXCoreREST\Workers
+ */
 class WorkerMakeLogFilesArchive extends WorkerBase
 {
-    public function start($argv): void
+    private string $progress_file = '';
+
+    /**
+     * Starts the log files archiving worker process.
+     *
+     * @param array $argv The command-line arguments passed to the worker.
+     * @return void
+     */
+    public function start(array $argv): void
     {
         $settings_file = $argv[2] ?? '';
+
+        // Check if the settings file exists
         if ( ! file_exists($settings_file)) {
-            Util::sysLogMsg("WorkerMakeLogFilesArchive", 'File with settings not found', LOG_ERR);
+            SystemMessages::sysLogMsg("WorkerMakeLogFilesArchive", 'File with settings not found', LOG_ERR);
 
             return;
         }
         $file_data = json_decode(file_get_contents($settings_file), true);
+
+        // Check if the 'result_file' key is present in the settings file
         if ( ! isset($file_data['result_file'])) {
-            Util::sysLogMsg("WorkerMakeLogFilesArchive", 'Wrong settings', LOG_ERR);
+            SystemMessages::sysLogMsg("WorkerMakeLogFilesArchive", 'Wrong settings', LOG_ERR);
 
             return;
         }
         $tcpdump_only  = $file_data['tcpdump_only'] ?? true;
         $resultFile    = $file_data['result_file'];
-        $progress_file = "{$resultFile}.progress";
-        file_put_contents($progress_file, '1');
+        $this->progress_file = "{$resultFile}.progress";
+        file_put_contents($this->progress_file, '1');
 
         $rmPath   = Util::which('rm');
-        $za7Path  = Util::which('7za');
         $findPath = Util::which('find');
 
+        // Remove the result file if it already exists
         if (file_exists($resultFile)) {
             Processes::mwExec("{$rmPath} -rf {$resultFile}");
         }
@@ -62,31 +82,42 @@ class WorkerMakeLogFilesArchive extends WorkerBase
             $command = "{$findPath} {$logDir}/tcpDump -type f ";
         } else {
             // Collect system info
-            file_put_contents($systemInfoFile, SysinfoManagementProcessor::prepareSysyinfoContent());
+            file_put_contents($systemInfoFile, GetInfoAction::prepareSysyinfoContent());
             $command = "{$findPath} {$logDir} -type f ";
         }
         Processes::mwExec($command, $out);
+        $zip     = new ZipArchive();
 
-        $countFiles = count($out);
-        foreach ($out as $index => $filename) {
-            if ( ! file_exists($filename)) {
-                continue;
+        $storageDir = '';
+        Storage::isStorageDiskMounted('',$storageDir);
+        if($zip->open($resultFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true){
+            foreach ($out as $filename) {
+                if ( !file_exists($filename)) {
+                    continue;
+                }
+                $zip->addFile($filename, str_replace("$storageDir/mikopbx/", '', $filename));
             }
-            Processes::mwExec("{$za7Path} a -tzip -spf '{$resultFile}' '{$filename}'", $out);
-            $progress = round(100 * ($index + 1) / $countFiles);
-            if ($progress % 5 === 0) {
-                file_put_contents($progress_file, $progress);
-                echo "$progress \n";
+            if(version_compare(PHP_VERSION, '8.0.0') >= 0){
+                $zip->registerProgressCallback(0.05, [$this, "progress"]);
             }
+            $zip->close();
         }
-        file_put_contents($progress_file, '100');
+        file_put_contents($this->progress_file, '100');
         if ($tcpdump_only === true) {
             // Delete TCP dump
             Processes::mwExec("{$rmPath} -rf {$logDir}/tcpDump");
         }
         Processes::mwExec("{$rmPath} -rf $systemInfoFile $settings_file");
     }
+
+    public function progress($rate):void
+    {
+        $progress = round($rate * 100);
+        if ($progress % 5 === 0) {
+            file_put_contents($this->progress_file, $progress);
+        }
+    }
 }
 
-// Start worker process
-WorkerMakeLogFilesArchive::startWorker($argv ?? null);
+// Start the log files archiving worker process
+WorkerMakeLogFilesArchive::startWorker($argv ?? []);

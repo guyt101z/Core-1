@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,18 +26,19 @@ use Phalcon\Validation\Validator\Uniqueness as UniquenessValidator;
 /**
  * Class Extensions
  *
- * @property \MikoPBX\Common\Models\Sip                       Sip
- * @property \MikoPBX\Common\Models\Users                     Users
- * @property \MikoPBX\Common\Models\ExternalPhones            ExternalPhones
- * @property \MikoPBX\Common\Models\DialplanApplications      DialplanApplications
- * @property \MikoPBX\Common\Models\ConferenceRooms           ConferenceRooms
- * @property \MikoPBX\Common\Models\CallQueues                CallQueues
- * @property \MikoPBX\Common\Models\OutWorkTimes              OutWorkTimes
- * @property \MikoPBX\Common\Models\IvrMenu                   IvrMenu
- * @property \MikoPBX\Common\Models\ExtensionForwardingRights ExtensionForwardingRights
+ * @property Sip Sip
+ * @property Users Users
+ * @property ExternalPhones ExternalPhones
+ * @property DialplanApplications DialplanApplications
+ * @property ConferenceRooms ConferenceRooms
+ * @property CallQueues CallQueues
+ * @property OutWorkTimes OutWorkTimes
+ * @property IvrMenu IvrMenu
+ * @property ExtensionForwardingRights ExtensionForwardingRights
  *
  *
  * @method static mixed findFirstByNumber(string|null $number)
+ * @method static mixed findByType(string|null $type)
  * @method static mixed findByUserid(int $userid)
  *
  * @package MikoPBX\Common\Models
@@ -52,6 +53,8 @@ class Extensions extends ModelsBase
     public const  TYPE_IVR_MENU = 'IVR MENU';
     public const  TYPE_CONFERENCE = 'CONFERENCE';
     public const  TYPE_MODULES = 'MODULES';
+    public const  TYPE_SYSTEM = 'SYSTEM';
+    public const  TYPE_PARKING = 'PARKING';
 
     /**
      * @Primary
@@ -61,48 +64,49 @@ class Extensions extends ModelsBase
     public $id;
 
     /**
-     * Внутренний номер или шаблон внутреннего номера
+     * Internal number or internal number pattern
      *
      * @Column(type="string", nullable=true)
      */
     public ?string $number = '';
 
     /**
-     * Тип внутреннего номера
+     * Type of the internal number
      *
      * @Column(type="string", nullable=true)
      */
     public ?string $type = '';
 
     /**
-     * Caller id для номера
+     * Caller ID for the number
      *
      * @Column(type="string", nullable=true)
      */
     public ?string $callerid = '';
 
     /**
-     * Ссылка на таблицу пользователей, может быть NULL, если это не пользоваетель
+     * Reference to the users table, can be NULL if it's not a user
      *
      * @Column(type="integer", nullable=true)
      */
     public ?int $userid = null;
 
     /**
-     * Признак отображения в телефонной книге, и при выборе в списках
+     * Flag indicating whether to show the number in the phonebook and selection lists
+     *
      * @Column(type="string", length=1, nullable=true, default="1")
      */
     public ?string $show_in_phonebook = '1';
 
     /**
-     * Признак возможности донабора этого номера звонящим из вне
+     * Flag indicating whether the number can be dialed by external callers
      *
      * @Column(type="string", length=1, nullable=true, default="1")
      */
     public ?string $public_access = '1';
 
     /**
-     * Признак основного номера пользователя, который редактируется в его карточке
+     * Flag indicating whether it is the general user number that is edited in the user's profile
      *
      * @Column(type="string", length=1, nullable=true, default="0")
      */
@@ -110,28 +114,67 @@ class Extensions extends ModelsBase
 
 
     /**
-     * Получает из базы следующий за последним введенным системным номером
+     * Get the next available application number from the database.
+     *
+     * @return string The next free application number.
      */
     public static function getNextFreeApplicationNumber(): string
     {
         $parameters = [
             'columns' => 'number',
         ];
-        $result     = self::find($parameters)->toArray();
+        // Retrieve all existing numbers from the database
+        $result = self::find($parameters)->toArray();
 
+        // Find the next available application number starting from 2200100
         $freeExtension = '2200100';
         for ($i = 100; ; $i++) {
             $freeExtension = "2200{$i}";
-            if ( ! in_array(['number' => $freeExtension], $result, false)) {
+            if (!in_array(['number' => $freeExtension], $result, false)) {
                 break;
             }
         }
-
         return $freeExtension;
     }
 
     /**
-     * Настройка статических отношений, также возможны динамические из модулей расширений
+     * Get the next available internal extension number.
+     *
+     * This function retrieves the minimum existing internal extension number from the database.
+     * If there are no existing internal numbers, it starts from 200.
+     * It then checks for available extension numbers within the range and returns the next available one.
+     *
+     * @return string The next available internal extension number, or an empty string if none are available.
+     */
+    public static function getNextInternalNumber(): string
+    {
+        $parameters = [
+            'column' => 'number',
+            'conditions'=>'type="'.Extensions::TYPE_SIP.'" and userid is not null'
+        ];
+        $started = Extensions::minimum($parameters);
+        if ($started === null) {
+            // If there are no existing internal numbers, start from 200
+            $started = 200;
+        }
+
+        $extensionsLength = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_INTERNAL_EXTENSION_LENGTH);
+        $maxExtension = (10 ** $extensionsLength) - 1;
+
+        $occupied = Extensions::find(['columns' => 'number'])->toArray();
+        $occupied = array_column($occupied, 'number');
+
+        for ($i = $started; $i <= $maxExtension ; $i++) {
+            if (!in_array((string)$i, $occupied)){
+                return (string)$i;
+            }
+        }
+        // There is no available extensions
+        return '';
+    }
+
+    /**
+     * Initialize the model.
      */
     public function initialize(): void
     {
@@ -142,10 +185,10 @@ class Extensions extends ModelsBase
             Users::class,
             'id',
             [
-                'alias'      => 'Users',
+                'alias' => 'Users',
                 'foreignKey' => [
                     'allowNulls' => true,
-                    'action'     => Relation::NO_ACTION,
+                    'action' => Relation::NO_ACTION,
                 ],
             ]
         );
@@ -154,10 +197,10 @@ class Extensions extends ModelsBase
             Sip::class,
             'extension',
             [
-                'alias'      => 'Sip',
+                'alias' => 'Sip',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE,
+                    'action' => Relation::ACTION_CASCADE,
                 ],
             ]
         );
@@ -166,10 +209,10 @@ class Extensions extends ModelsBase
             ExternalPhones::class,
             'extension',
             [
-                'alias'      => 'ExternalPhones',
+                'alias' => 'ExternalPhones',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE,
+                    'action' => Relation::ACTION_CASCADE,
                 ],
             ]
         );
@@ -178,10 +221,10 @@ class Extensions extends ModelsBase
             DialplanApplications::class,
             'extension',
             [
-                'alias'      => 'DialplanApplications',
+                'alias' => 'DialplanApplications',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE // DialplanApplications всегда удаляем через его Extension
+                    'action' => Relation::ACTION_CASCADE // DialplanApplications is always deleted through its Extension
                 ],
             ]
         );
@@ -190,10 +233,10 @@ class Extensions extends ModelsBase
             ConferenceRooms::class,
             'extension',
             [
-                'alias'      => 'ConferenceRooms',
+                'alias' => 'ConferenceRooms',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE // ConferenceRooms всегда удаляем через его Extension
+                    'action' => Relation::ACTION_CASCADE // ConferenceRooms is always deleted through its Extension
                 ],
             ]
         );
@@ -203,10 +246,10 @@ class Extensions extends ModelsBase
             CallQueues::class,
             'extension',
             [
-                'alias'      => 'CallQueues',
+                'alias' => 'CallQueues',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE // CallQueues всегда удаляем через его Extension
+                    'action' => Relation::ACTION_CASCADE // CallQueues is always deleted through its Extension
                 ],
             ]
         );
@@ -215,11 +258,11 @@ class Extensions extends ModelsBase
             CallQueues::class,
             'timeout_extension',
             [
-                'alias'      => 'CallQueueRedirectRightsTimeout',
+                'alias' => 'CallQueueRedirectRightsTimeout',
                 'foreignKey' => [
                     'allowNulls' => true,
-                    'message'    => 'CallQueueRedirectRightsTimeout',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'CallQueueRedirectRightsTimeout',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -228,11 +271,11 @@ class Extensions extends ModelsBase
             CallQueues::class,
             'redirect_to_extension_if_empty',
             [
-                'alias'      => 'CallQueueRedirectRightsIfEmpty',
+                'alias' => 'CallQueueRedirectRightsIfEmpty',
                 'foreignKey' => [
                     'allowNulls' => true,
-                    'message'    => 'CallQueueRedirectRightsIfEmpty',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'CallQueueRedirectRightsIfEmpty',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -241,11 +284,11 @@ class Extensions extends ModelsBase
             CallQueues::class,
             'redirect_to_extension_if_unanswered',
             [
-                'alias'      => 'CallQueueRedirectRightsIfUnanswered',
+                'alias' => 'CallQueueRedirectRightsIfUnanswered',
                 'foreignKey' => [
                     'allowNulls' => true,
-                    'message'    => 'CallQueueRedirectRightsIfUnanswered',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'CallQueueRedirectRightsIfUnanswered',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -254,11 +297,11 @@ class Extensions extends ModelsBase
             CallQueues::class,
             'redirect_to_extension_if_repeat_exceeded',
             [
-                'alias'      => 'CallQueueRedirectRightsIfRepeatExceeded',
+                'alias' => 'CallQueueRedirectRightsIfRepeatExceeded',
                 'foreignKey' => [
                     'allowNulls' => true,
-                    'message'    => 'CallQueueRedirectRightsIfRepeatExceeded',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'CallQueueRedirectRightsIfRepeatExceeded',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -268,10 +311,10 @@ class Extensions extends ModelsBase
             CallQueueMembers::class,
             'extension',
             [
-                'alias'      => 'CallQueueMembers',
+                'alias' => 'CallQueueMembers',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE,
+                    'action' => Relation::ACTION_CASCADE, // CallQueueMembers is always deleted through its Extension
                 ],
             ]
         );
@@ -280,12 +323,12 @@ class Extensions extends ModelsBase
             IncomingRoutingTable::class,
             'extension',
             [
-                'alias'      => 'IncomingRoutingTable',
+                'alias' => 'IncomingRoutingTable',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
-                'params'     => [
+                'params' => [
                     'order' => 'priority asc',
                 ],
             ]
@@ -295,10 +338,10 @@ class Extensions extends ModelsBase
             OutWorkTimes::class,
             'extension',
             [
-                'alias'      => 'OutWorkTimes',
+                'alias' => 'OutWorkTimes',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -307,10 +350,10 @@ class Extensions extends ModelsBase
             ExtensionForwardingRights::class,
             'extension',
             [
-                'alias'      => 'ExtensionForwardingRights',
+                'alias' => 'ExtensionForwardingRights',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE,
+                    'action' => Relation::ACTION_CASCADE, // ExtensionForwardingRights is always deleted through its Extension
                 ],
             ]
         );
@@ -320,11 +363,11 @@ class Extensions extends ModelsBase
             ExtensionForwardingRights::class,
             'forwarding',
             [
-                'alias'      => 'ExtensionForwardingRightsForwarding',
+                'alias' => 'ExtensionForwardingRightsForwarding',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'message'    => 'ExtensionForwardingRightsForwarding',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'ExtensionForwardingRightsForwarding',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -333,11 +376,11 @@ class Extensions extends ModelsBase
             ExtensionForwardingRights::class,
             'forwardingonbusy',
             [
-                'alias'      => 'ExtensionForwardingRightsForwardingOnBusy',
+                'alias' => 'ExtensionForwardingRightsForwardingOnBusy',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'message'    => 'ExtensionForwardingRightsForwardingOnBusy',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'ExtensionForwardingRightsForwardingOnBusy',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -346,11 +389,11 @@ class Extensions extends ModelsBase
             ExtensionForwardingRights::class,
             'forwardingonunavailable',
             [
-                'alias'      => 'ExtensionForwardingRightsOnUnavailable',
+                'alias' => 'ExtensionForwardingRightsOnUnavailable',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'message'    => 'ExtensionForwardingRightsOnUnavailable',
-                    'action'     => Relation::ACTION_RESTRICT,
+                    'message' => 'ExtensionForwardingRightsOnUnavailable',
+                    'action' => Relation::ACTION_RESTRICT,
                 ],
             ]
         );
@@ -360,10 +403,10 @@ class Extensions extends ModelsBase
             IvrMenu::class,
             'extension',
             [
-                'alias'      => 'IvrMenu',
+                'alias' => 'IvrMenu',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_CASCADE // IVR меню удаляем через его Extension
+                    'action' => Relation::ACTION_CASCADE // IvrMenu is always deleted through its Extension
                 ],
             ]
         );
@@ -373,12 +416,12 @@ class Extensions extends ModelsBase
             IvrMenu::class,
             'timeout_extension',
             [
-                'alias'      => 'IvrMenuTimeout',
+                'alias' => 'IvrMenuTimeout',
                 'foreignKey' => [
-                    'message'    => 'IvrMenuTimeout',
+                    'message' => 'IvrMenuTimeout',
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_RESTRICT
-                    // Запретим удалять внутренний номер если он используется в IVR меню
+                    'action' => Relation::ACTION_RESTRICT
+                    // Restrict the deletion of an internal number if it is used in an IVR menu timeout
                 ],
             ]
         );
@@ -388,29 +431,29 @@ class Extensions extends ModelsBase
             IvrMenuActions::class,
             'extension',
             [
-                'alias'      => 'IvrMenuActions',
+                'alias' => 'IvrMenuActions',
                 'foreignKey' => [
                     'allowNulls' => false,
-                    'action'     => Relation::ACTION_RESTRICT
-                    // Запретим удалять внутренний номер если он используется в IVR меню
+                    'action' => Relation::ACTION_RESTRICT
+                    // Restrict the deletion of an internal number if it is used in an IVR menu actions
                 ],
             ]
         );
     }
 
     /**
-     * Обработчики после обновления данных модели
+     * Handlers after model data is updated.
      */
     public function afterUpdate(): void
     {
         $updatedFields = $this->getUpdatedFields();
-        if (is_array($updatedFields) && in_array('number', $updatedFields, false)) {
+        if (in_array('number', $updatedFields, false)) {
             $this->updateRelationshipsNumbers();
         }
     }
 
     /**
-     * Обновляет номера во всех связанных таблицах при имзенении номера Extensions
+     * Update numbers in all related tables when the Extensions number is changed.
      */
     private function updateRelationshipsNumbers(): void
     {
@@ -428,12 +471,12 @@ class Extensions extends ModelsBase
                 )
             ) {
                 $referencedFields = $relation->getReferencedFields();
-                $relatedModel     = $relation->getReferencedModel();
+                $relatedModel = $relation->getReferencedModel();
                 $referencedFields = is_array($referencedFields) ? $referencedFields : [$referencedFields];
                 foreach ($referencedFields as $referencedField) {
-                    $parameters     = [
+                    $parameters = [
                         'conditions' => $referencedField . '= :oldNumber:',
-                        'bind'       => ['oldNumber' => $snapShotData['number']],
+                        'bind' => ['oldNumber' => $snapShotData['number']],
                     ];
                     $relatedRecords = call_user_func([$relatedModel, 'find'], $parameters);
                     foreach ($relatedRecords as $relatedRecord) {
@@ -446,9 +489,9 @@ class Extensions extends ModelsBase
     }
 
     /**
-     * Валидация уникальности номера
+     * Perform validation on the model.
      *
-     * @return bool
+     * @return bool Whether the validation was successful or not.
      */
     public function validation(): bool
     {
@@ -466,16 +509,20 @@ class Extensions extends ModelsBase
     }
 
     /**
-     * Возвращает ссылки на текущую запись
+     * Get the related links to the current record.
      *
-     * @return array - массив ссылок
+     * @return array An array of links.
      */
     public function getRelatedLinks(): array
     {
-        $result    = [];
+        $result = [];
         $relations = $this->_modelsManager->getRelations(__CLASS__);
+
+        // Iterate through the relations of the current model
         foreach ($relations as $relation) {
             $relationFields = $relation->getFields();
+
+            // Check if the relation is based on the 'number' field
             if ($relationFields === 'number'
                 ||
                 (
@@ -484,17 +531,23 @@ class Extensions extends ModelsBase
                 )
             ) {
                 $referencedFields = $relation->getReferencedFields();
-                $relatedModel     = $relation->getReferencedModel();
+                $relatedModel = $relation->getReferencedModel();
                 $referencedFields = is_array($referencedFields) ? $referencedFields : [$referencedFields];
+
+                // Iterate through the referenced fields
                 foreach ($referencedFields as $referencedField) {
-                    $parameters     = [
+                    $parameters = [
                         'conditions' => $referencedField . '= :Number:',
-                        'bind'       => ['Number' => $this->number],
+                        'bind' => ['Number' => $this->number],
                     ];
+
+                    // Retrieve the related records based on the matching number
                     $relatedRecords = call_user_func([$relatedModel, 'find'], $parameters);
+
+                    // Build an array of links with the related record and reference field
                     foreach ($relatedRecords as $relatedRecord) {
                         $result[] = [
-                            'object'         => $relatedRecord,
+                            'object' => $relatedRecord,
                             'referenceField' => $referencedField,
                         ];
                     }
@@ -505,5 +558,14 @@ class Extensions extends ModelsBase
         return $result;
     }
 
+    /**
+     * Sanitizes the caller ID by removing any characters that are not alphanumeric or spaces.
+     * This function is automatically triggered before saving the call model.
+     */
+    public function beforeSave()
+    {
+        // Sanitizes the caller ID by removing any characters that are not alphanumeric or spaces.
+        $this->callerid = preg_replace('/[^a-zA-Zа-яА-Я0-9 ]/ui', '', $this->callerid);
+    }
 
 }

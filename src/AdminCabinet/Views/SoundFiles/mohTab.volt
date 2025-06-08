@@ -1,6 +1,6 @@
 {% for record in mohFiles %}
     {% if loop.first %}
-        <table class="ui selectable compact table" id="moh-sound-files-table">
+        <table class="ui selectable compact unstackable table" id="moh-sound-files-table">
         <thead>
         <tr>
             <th>{{ t._('sf_ColumnFile') }}</th>
@@ -11,7 +11,7 @@
         <tbody>
     {% endif %}
     <tr class="file-row" id="{{ record.id }}" data-value="{{ record.path }}">
-        <td class="name"><i class="file audio outline icon"></i>{{ record.name }}</td>
+        <td class="name collapsing"><i class="file audio outline icon"></i>{{ record.name }}</td>
         <td class="cdr-player">
             <table>
                 <tr>
@@ -24,7 +24,7 @@
                         {% else %}
                             <i class="ui icon play"></i>
                             <audio preload="metadata" id="audio-player-{{ record.id }}">
-                                <source src="{{ '/pbxcore/api/cdr/playback?view='~record.path }}"/>
+                                <source src="{{ '/pbxcore/api/cdr/v2/playback?view='~record.path }}"/>
                             </audio>
                         {% endif %}
                     </td>
@@ -37,7 +37,7 @@
                             <i class="ui icon download" data-value=""></i>
                         {% else %}
                             <i class="ui icon download"
-                               data-value="{{ '/pbxcore/api/cdr/playback?view='~record.path~'&download=1&filename='~record.name~'.mp3' }}"></i>
+                               data-value="{{ '/pbxcore/api/cdr/v2/playback?view='~record.path~'&download=1&filename='~record.name~'.mp3' }}"></i>
                         {% endif %}
 
                     </td>

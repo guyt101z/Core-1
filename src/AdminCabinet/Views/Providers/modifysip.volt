@@ -7,122 +7,140 @@
 {{ form.render('type') }}
 {{ form.render('disabled') }}
 {{ form.render('providerType') }}
-<input type="hidden" name="dirrty" id="dirrty"/>
-
-<div class="ten wide required field">
-    <label>{{ t._('pr_ProviderName') }}</label>
+<div class="required field max-width-500">
+    <label for="description">{{ t._('pr_ProviderName') }}</label>
     {{ form.render('description') }}
 </div>
-
-<div class="five wide field required">
-    <label>{{ t._('pr_ProviderHostOrIPAddress') }}</label>
+<div class="field max-width-500">
+    <label for="registration_type">{{ t._('sip_registration_type') }}</label>
+    {{ form.render('registration_type') }}
+</div>
+<div id='elHost' class="field required max-width-500">
+    <label for="host">{{ t._('pr_ProviderHostOrIPAddress') }}</label>
     {{ form.render('host') }}
 </div>
 
-<div class="ten wide field">
-    <label>{{ t._('pr_ProviderLogin') }}</label>
+<div id='elUsername' class="field max-width-500">
+    <label for="username">{{ t._('pr_ProviderLogin') }}</label>
     {{ form.render('username') }}
 </div>
 
-<div class="ten wide field">
-    <label>{{ t._('pr_ProviderPassword') }}</label>
-    {{ form.render('secret') }}
+<div id='elSecret' class="field max-width-500">
+    <label for="secret">{{ t._('pr_ProviderPassword') }}</label>
+    <div class="ui action input">
+        {{ form.render('secret') }}
+        <div class="ui icon button" id="generate-new-password">
+            <i class="refresh icon "></i>
+        </div>
+        <a class="ui button clipboard" data-clipboard-text="{{ secret }}" data-variation="basic" data-content="{{ t._('bt_ToolTipCopyPassword') }}">
+            <i class="icons">
+                <i class="icon copy "></i>
+            </i>
+        </a>
+    </div>
 </div>
 
-<div class="five wide field">
-    <label>{{ t._('pr_DTMFMode') }}</label>
-    {{ form.render('dtmfmode') }}
+<div class="field">
+    <label for="dtmfmode">{{ t._('pr_DTMFMode') }}</label>
+    <div class="field max-width-200">
+        {{ form.render('dtmfmode') }}
+    </div>
 </div>
+
+<div class="field max-width-800">
+    <label for="note">{{ t._('pr_Note') }}</label>
+    {{ form.render('note') }}
+</div>
+{{ partial("PbxExtensionModules/hookVoltBlock",['arrayOfPartials':hookVoltBlock('Fields')]) }}
 
 <div class="ui accordion field">
     <div class=" title">
         <i class="icon dropdown"></i>
-        {{ t._('AdvancedOptions') }}
+        <b>{{ t._('AdvancedOptions') }}</b>
     </div>
 
-    <div class=" content field">
-        <h3 class="ui dividing header ">{{ t._("ConnectionSettings") }}</h3>
-
-        <div class="six wide field">
-            <label>{{ t._('pr_EnterHostOrIp') }}</label>
-            <div class="ui input" id="additional-host">
-                <input type="text" name="additional-host" placeholder="{{ t._('pr_EnterHostOrIpPlaceholder') }}" />
+    <div class="content field">
+        <div class="field max-width-500">
+            <div id="elAdditionalHosts" class="field">
+                <h4 class="ui dividing header ">{{ t._('pr_EnterHostOrIp') }}</h4>
+                <div class="ui input" id="additional-host">
+                    <input type="text" name="additional-host" placeholder="{{ t._('pr_EnterHostOrIpPlaceholder') }}" />
+                </div>
+                <div class="ui basic compact segment">
+                    <table class="ui small very compact table" id="additional-hosts-table">
+                        <tbody>
+                        {% for address in hostsTable %}
+                            <tr class="host-row" data-value="{{ address }}">
+                                <td class="address">{{ address }}</td>
+                                <td class="right aligned collapsing">
+                                    <div class="ui icon small button delete-row-button"><i class="icon trash red"></i></div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr class="host-row-tpl" style="display: none">
+                            <td class="address"></td>
+                            <td class="right aligned collapsing">
+                                <div class="ui icon small button delete-row-button"><i class="icon trash red"></i></div>
+                            </td>
+                        </tr>
+                        <tr class="dummy" style="display: none">
+                            <td colspan="2" class="center aligned">
+                                {{ t._('pr_NoAnyAdditionalHosts')}}
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-        <div class="ui basic compact segment">
-            <table class="ui small very compact table" id="additional-hosts-table">
-                <tbody>
-                {% for address in hostsTable %}
-                    <tr class="host-row" data-value="{{ address }}">
-                        <td class="address">{{ address }}</td>
-                        <td class="right aligned collapsing">
-                            <div class="ui icon small button delete-row-button"><i class="icon trash red"></i></div>
-                        </td>
-                    </tr>
-                {% endfor %}
-                <tr class="host-row-tpl" style="display: none">
-                    <td class="address"></td>
-                    <td class="right aligned collapsing">
-                        <div class="ui icon small button delete-row-button"><i class="icon trash red"></i></div>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="five wide field">
-            <label for="port">{{ t._('pr_SIPPort') }}</label>
-            {{ form.render('port') }}
-        </div>
-
-        {{ partial("partials/natqualify") }}
-
-        <h3 class="ui dividing header ">{{ t._("pr_RegistrationSettings") }}</h3>
-        {{ t._("pr_CustomFieldsDescriptions") }}
-        <div class=" field">
-            <label for="defaultuser">{{ t._('pr_DefaultUser') }}</label>
-            {{ form.render('defaultuser') }}
-        </div>
-        <div class=" field">
-            <label for="fromuser">{{ t._('pr_FromUser') }}</label>
-            {{ form.render('fromuser') }}
         </div>
         <div class="field">
-            <label for="fromdomain">{{ t._('pr_FromDomain') }}</label>
-            {{ form.render('fromdomain') }}
-        </div>
-        <div class="ui segment">
-            <div class="field">
-                <div class="ui toggle checkbox" id="disablefromuser">
-                    {{ form.render('disablefromuser') }}
-                    <label>{{ t._('pr_DisableFromUser') }}</label>
-                </div>
+            <label for="port">{{ t._('pr_SIPPort') }}</label>
+            <div class="field max-width-200">
+                {{ form.render('port') }}
             </div>
         </div>
-        <div class="ui segment">
-            <div class="field">
-                <div class="ui toggle checkbox" id="noregister">
-                    {{ form.render('noregister') }}
-                    <label>{{ t._('pr_NoRegister') }}</label>
-                </div>
+        <div class="field">
+            <label for="transport">{{ t._('ex_Transport') }}</label>
+            <div class="field max-width-200">
+                {{ form.render('transport') }}
             </div>
         </div>
-        <div class="ui segment">
-            <div class="field">
-                <div class="ui toggle checkbox" id="receive_calls_without_auth">
-                    {{ form.render('receive_calls_without_auth') }}
-                    <label>{{ t._('pr_ReceiveCallsWithoutAuth') }}</label>
-                </div>
+        <div class="field">
+            <label for="outbound_proxy">{{ t._('ex_OutboundProxy') }}</label>
+            <div class="field max-width-500">
+                {{ form.render('outbound_proxy') }}
             </div>
         </div>
+        {{ partial("partials/natqualify") }}
 
 
-        <h3 class="ui dividing header ">{{ t._("pr_ManualAdditionalAtributes") }}</h3>
+        <h4 class="ui dividing header ">{{ t._('pr_RedefinitionFromUser') }}</h4>
+        <div class="field">
+            <div class="ui toggle checkbox" id="disablefromuser">
+                {{ form.render('disablefromuser') }}
+                <label for="disablefromuser">{{ t._('pr_DisableFromUser') }}</label>
+            </div>
+        </div>
+        <div class="field">
+            <div class="two fields ">
+                <div id="divFromUser" class="field max-width-400">
+                    <label for="fromuser">{{ t._('pr_FromUser_v2') }}:</label>
+                    {{ form.render('fromuser') }}
+                </div>
+                <div class="field max-width-400">
+                    <label for="fromdomain">{{ t._('pr_FromDomain_v2') }}:</label>
+                    {{ form.render('fromdomain') }}
+                </div>
+            </div>
+            <div class='ui info message'>{{ t._('pr_CustomFieldsDescriptions') }}</div>
+        </div>
+
+        <h4 class="ui dividing header ">{{ t._("pr_ManualAdditionalAtributes") }}</h4>
         <div class="field">
             {{ form.render('manualattributes') }}
         </div>
-
+        {{ partial("PbxExtensionModules/hookVoltBlock",['arrayOfPartials':hookVoltBlock('AdvancedFields')]) }}
     </div>
 </div>
 {{ partial("partials/submitbutton",['indexurl':'providers/index/']) }}
-</form>
+{{ end_form() }}

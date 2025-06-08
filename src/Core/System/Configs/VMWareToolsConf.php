@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,49 +20,42 @@
 namespace MikoPBX\Core\System\Configs;
 
 
-use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\Util;
-use phpDocumentor\Reflection\Types\True_;
 
+/**
+ * Class VMWareToolsConf
+ *
+ * Represents the VMWareTools configuration.
+ *
+ * @package MikoPBX\Core\System\Configs
+ */
 class VMWareToolsConf
 {
-    private MikoPBXConfig $mikoPBXConfig;
-
     /**
-     * VMWareToolsConf constructor.
-     */
-    public function __construct()
-    {
-        $this->mikoPBXConfig = new MikoPBXConfig();
-    }
-
-
-    /**
-     * Configure and starts VMWareTools
+     * Configure and start VMWareTools.
+     *
+     * @return bool
      */
     public function configure(): bool
     {
         Processes::killByName("vmtoolsd");
-        $virtualHW = $this->mikoPBXConfig->getGeneralSettings('VirtualHardwareType');
-        $result = 0;
-        if ('VMWARE' === $virtualHW) {
-            $conf = "[logging]\n"
-                . "log = false\n"
-                . "vmtoolsd.level = none\n"
-                . ";vmsvc.data = /dev/null\n"
-                . "vmsvc.level = none\n";
 
-            $dirVM = '/etc/vmware-tools';
-            if(!file_exists($dirVM)){
-                Util::mwMkdir($dirVM);
-            }
+        $conf = "[logging]\n"
+            . "log = false\n"
+            . "vmtoolsd.level = none\n"
+            . ";vmsvc.data = /dev/null\n"
+            . "vmsvc.level = none\n";
 
-            file_put_contents("{$dirVM}/tools.conf", $conf);
-            $vmtoolsdPath = Util::which('vmtoolsd');
-            $result = Processes::mwExec("{$vmtoolsdPath} --background=/var/run/vmtoolsd.pid > /dev/null 2> /dev/null");
+        $dirVM = '/etc/vmware-tools';
+        if (!file_exists($dirVM)) {
+            Util::mwMkdir($dirVM);
         }
 
-        return $result===0;
+        file_put_contents("{$dirVM}/tools.conf", $conf);
+        $vmtoolsdPath = Util::which('vmtoolsd');
+        $result = Processes::mwExec("{$vmtoolsdPath} --background=/var/run/vmtoolsd.pid > /dev/null 2> /dev/null");
+
+        return $result === 0;
     }
 }

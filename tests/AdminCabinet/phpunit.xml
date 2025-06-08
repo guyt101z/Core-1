@@ -1,41 +1,58 @@
 <!--
-  ~ Copyright (C) MIKO LLC - All Rights Reserved
-  ~ Unauthorized copying of this file, via any medium is strictly prohibited
-  ~ Proprietary and confidential
-  ~ Written by Nikolay Beketov, 5 2020
-  ~
+ ~ MikoPBX - free phone system for small business
+ ~ Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
+ ~
+ ~ This program is free software: you can redistribute it and/or modify
+ ~ it under the terms of the GNU General Public License as published by
+ ~ the Free Software Foundation; either version 3 of the License, or
+ ~ (at your option) any later version.
+ ~
+ ~ This program is distributed in the hope that it will be useful,
+ ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ ~ GNU General Public License for more details.
+ ~
+ ~ You should have received a copy of the GNU General Public License along with this program.
+ ~ If not, see <https://www.gnu.org/licenses/>.
   -->
 
  <phpunit bootstrap="../../vendor/autoload.php">
     <testsuites>
         <testsuite name="TestMikoPBX">
-            <file>Tests/LoginTest.php</file>
+            <file>Tests/ChangeWeakPasswordTest.php</file>
+            <file>Tests/ChangeLicenseKeyTest.php</file>
+            <file>Tests/InstallModulesTest.php</file>
             <file>Tests/FillPBXSettingsTest.php</file>
             <file>Tests/CustomFileChangeTest.php</file>
+            <file>Tests/CheckDropdownBeforeCreateAudioFileTest.php</file>
             <file>Tests/CreateAudioFilesTest.php</file>
-            <file>Tests/CreateSIPProviders.php</file>
-            <file>Tests/CreateIAXProviders.php</file>
+            <file>Tests/CheckDropdownAfterCreateAudioFileTest.php</file>
+            <file>Tests/DeleteAudioFileTest.php</file>
+            <file>Tests/CheckDropdownAfterDeleteAudioFileTest.php</file>
+            <file>Tests/CreateSIPProvidersTest.php</file>
+            <file>Tests/CreateIAXProvidersTest.php</file>
             <file>Tests/CreateIncomingCallRules.php</file>
             <file>Tests/CreateDefaultIncomingCallRule.php</file>
-            <file>Tests/CreateOutgoingCallRules.php</file>
+            <file>Tests/CreateOutgoingCallRulesTest.php</file>
             <file>Tests/CreateOutOfWorkPeriodsTest.php</file>
-            <file>Tests/CreateCallQueue.php</file>
+            <file>Tests/CreateCallQueueTest.php</file>
             <file>Tests/CreateIVRMenusTest.php</file>
             <file>Tests/CreateExtensionsTest.php</file>
-            <file>Tests/FillDataTimeSettings.php</file>
+            <file>Tests/FillDataTimeSettingsTest.php</file>
             <file>Tests/CreateMOHAudioFilesTest.php</file>
             <file>Tests/CreateAmiUsersTest.php</file>
-            <file>Tests/CreateFail2BanRules.php</file>
-            <file>Tests/CreateFirewallRules.php</file>
+            <file>Tests/CreateFail2BanRulesTest.php</file>
+            <file>Tests/CreateFirewallRulesTest.php</file>
             <file>Tests/CreateConferenceRoomsTest.php</file>
             <file>Tests/CreateDialPlanApplicationTest.php</file>
             <file>Tests/NetworkInterfacesTest.php</file>
             <file>Tests/ChangeExtensionsSettingsTest.php</file>
             <file>Tests/ChangeCallQueueTest.php</file>
             <file>Tests/DeleteExtensionTest.php</file>
+            <file>Tests/DeleteExtensionFromDropDownTest.php</file>
             <file>Tests/DeleteProviderTest.php</file>
-            <file>Tests/ChangeLicenseKeyTest.php</file>
-            <file>Tests/InstallModulesTest</file>
+            <file>Tests/CheckDropdownsOnAddExtensionsTest.php</file>
+            <file>Tests/CheckDropdownsOnDeleteQueueTest.php</file>
         </testsuite>
     </testsuites>
 </phpunit>

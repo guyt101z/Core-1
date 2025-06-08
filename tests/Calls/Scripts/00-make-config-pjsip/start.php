@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,21 +23,22 @@ use MikoPBX\Tests\Calls\Scripts\TestCallsBase;
 use MikoPBX\Common\Models\OutgoingRoutingTable;
 use MikoPBX\Core\System\Processes;
 require_once 'Globals.php';
+require_once dirname(__DIR__).'/TestCallsBase.php';
 
 $testName = basename(__DIR__);
 TestCallsBase::printHeader("Start test {$testName}");
-
 TestCallsBase::printInfo("Get data peers...");
 $limitPeers = 5;
 $peers = Sip::find([
     "type = 'peer' AND disabled <> '1'",
-    'limit' => 20
+    'limit' => $limitPeers,
+    'order' => 'extension'
 ])->toArray();
 
 $limitProviders = 2;
 // Подбираем учетки провайдеров.
 $providers = Sip::find([
-    "type='friend' AND disabled<>'1' and noregister='1'",
+    "type='friend' AND disabled<>'1' AND registration_type='none'",
     'limit' => $limitProviders
 ])->toArray();
 
@@ -46,7 +47,8 @@ $peers = array_merge(... [$peers, $providers]);
 
 TestCallsBase::printInfo("Make pjsip.conf...");
 $enpointPattern = file_get_contents(__DIR__.'/configs/pjsip-pattern-endpoint.conf');
-$config         = file_get_contents(__DIR__.'/configs/pjsip-pattern.conf');
+
+$config         = str_replace('<USER-AGENT>', getenv('USER_AGENT'), file_get_contents(__DIR__.'/configs/pjsip-pattern.conf'));
 foreach ($peers as $peer){
     $columnName = ($peer["type"] === 'friend')?'uniqid':'extension';
     $conf = str_replace(array('<ENDPOINT>', '<PASSWORD>'), array($peer[$columnName], $peer['secret']), $enpointPattern);
@@ -76,7 +78,7 @@ do{
 }while(count($idlePeers) < $limitPeers);
 
 TestCallsBase::printInfo('Time waiting '.(time() - $start).'s...');
-if(count($idlePeers) !== $limitPeers){
+if(count($idlePeers) < $limitPeers){
     TestCallsBase::printError('Not all endpoint are registered:');
 }else{
     TestCallsBase::printInfo('Endpoints connected successfully');

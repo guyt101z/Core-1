@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,13 @@ declare(strict_types=1);
 
 namespace MikoPBX\PBXCoreREST\Providers;
 
-use MikoPBX\PBXCoreREST\Controllers\{Cdr\GetController as CdrGetController,
+use MikoPBX\PBXCoreREST\Controllers\
+{
+    Cdr\GetController as CdrGetController,
     Iax\GetController as IaxGetController,
     Modules\ModulesControllerBase,
+    Modules\CorePostController as ModulesCorePostController,
+    Modules\CoreGetController as ModulesCoreGetController,
     Sip\GetController as SipGetController,
     Sip\PostController as SipPostController,
     Storage\GetController as StorageGetController,
@@ -35,13 +39,29 @@ use MikoPBX\PBXCoreREST\Controllers\{Cdr\GetController as CdrGetController,
     Sysinfo\PostController as SysinfoPostController,
     System\GetController as SystemGetController,
     System\PostController as SystemPostController,
+    Firewall\GetController as FirewallGetController,
+    Firewall\PostController as FirewallPostController,
     Files\GetController as FilesGetController,
     Files\PostController as FilesPostController,
-    Advices\GetController as AdvicesGetController,
+    Advice\GetController as AdviceGetController,
+    Extensions\GetController as ExtensionsGetController,
+    Extensions\PostController as ExtensionsPostController,
+    CallQueues\GetController as CallQueuesGetController,
+    CallQueues\PostController as CallQueuesPostController,
+    IvrMenu\GetController as IvrMenuGetController,
+    IvrMenu\PostController as IvrMenuPostController,
+    DialplanApplications\GetController as DialplanApplicationsGetController,
+    DialplanApplications\PostController as DialplanApplicationsPostController,
+    ConferenceRooms\GetController as ConferenceRoomsGetController,
+    ConferenceRooms\PostController as ConferenceRoomsPostController,
+    Users\GetController as UsersGetController,
+    Nchan\GetController as NchanGetController,
     License\GetController as LicenseGetController,
     License\PostController as LicensePostController
 };
-use MikoPBX\Modules\Config\ConfigClass;
+
+use MikoPBX\Common\Providers\PBXConfModulesProvider;
+use MikoPBX\Modules\Config\RestAPIConfigInterface;
 use MikoPBX\PBXCoreREST\Middleware\AuthenticationMiddleware;
 use MikoPBX\PBXCoreREST\Middleware\NotFoundMiddleware;
 use MikoPBX\PBXCoreREST\Middleware\ResponseMiddleware;
@@ -50,10 +70,13 @@ use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Events\Manager;
 use Phalcon\Mvc\Micro;
 use Phalcon\Mvc\Micro\Collection;
+use Phalcon\Events\Event;
 
 
 /**
  * Register Router service
+ *
+ * @package MikoPBX\PBXCoreREST\Providers
  */
 class RouterProvider implements ServiceProviderInterface
 {
@@ -62,7 +85,7 @@ class RouterProvider implements ServiceProviderInterface
     /**
      * Register response service provider
      *
-     * @param \Phalcon\Di\DiInterface $di
+     * @param DiInterface $di The DI container.
      */
     public function register(DiInterface $di): void
     {
@@ -73,6 +96,7 @@ class RouterProvider implements ServiceProviderInterface
 
         $this->attachRoutes($application);
         $this->attachMiddleware($application, $eventsManager);
+        $this->attachModuleHooks($application, $eventsManager);
 
         $application->setEventsManager($eventsManager);
     }
@@ -84,12 +108,12 @@ class RouterProvider implements ServiceProviderInterface
      */
     private function attachRoutes(Micro $application): void
     {
+
         // Add hard coded routes
         $routes = $this->getRoutes();
 
         // Add additional modules routes
-        $configClassObj = new ConfigClass();
-        $additionalRoutes = $configClassObj->hookModulesMethodWithArrayResult(ConfigClass::GET_PBXCORE_REST_ADDITIONAL_ROUTES);
+        $additionalRoutes = PBXConfModulesProvider::hookModulesMethod(RestAPIConfigInterface::GET_PBXCORE_REST_ADDITIONAL_ROUTES);
         $additionalRoutes = array_values($additionalRoutes);
         $routes = array_merge($routes, ...$additionalRoutes);
 
@@ -124,7 +148,10 @@ class RouterProvider implements ServiceProviderInterface
             [IaxGetController::class, 'callAction', '/pbxcore/api/iax/{actionName}', 'get', '/'],
 
             [CdrGetController::class, 'callAction', '/pbxcore/api/cdr/{actionName}', 'get', '/'],
-            [CdrGetController::class, 'playbackAction', '/pbxcore/api/cdr/playback', 'get', '/'],
+            [CdrGetController::class, 'callAction', '/pbxcore/api/cdr/v2/{actionName}', 'get', '/'],
+
+            [FirewallGetController::class, 'callAction', '/pbxcore/api/firewall/{actionName}', 'get', '/'],
+            [FirewallPostController::class, 'callAction', '/pbxcore/api/firewall/{actionName}', 'post', '/'],
 
             [StorageGetController::class, 'callAction', '/pbxcore/api/storage/{actionName}', 'get', '/'],
             [StoragePostController::class, 'callAction', '/pbxcore/api/storage/{actionName}', 'post', '/'],
@@ -141,11 +168,31 @@ class RouterProvider implements ServiceProviderInterface
             [FilesGetController::class, 'callAction', '/pbxcore/api/files/{actionName}', 'get', '/'],
             [FilesPostController::class, 'callAction', '/pbxcore/api/files/{actionName}', 'post', '/'],
 
-            [AdvicesGetController::class, 'callAction', '/pbxcore/api/advices/{actionName}', 'get', '/'],
+            [AdviceGetController::class, 'callAction', '/pbxcore/api/advice/{actionName}', 'get', '/'],
+
+            [ExtensionsGetController::class, 'callAction', '/pbxcore/api/extensions/{actionName}', 'get', '/'],
+            [ExtensionsPostController::class, 'callAction', '/pbxcore/api/extensions/{actionName}', 'post', '/'],
+
+            [CallQueuesGetController::class, 'callAction', '/pbxcore/api/call-queues/{actionName}', 'get', '/'],
+            [CallQueuesPostController::class, 'callAction', '/pbxcore/api/call-queues/{actionName}', 'post', '/'],
+
+            [IvrMenuGetController::class, 'callAction', '/pbxcore/api/ivr-menu/{actionName}', 'get', '/'],
+            [IvrMenuPostController::class, 'callAction', '/pbxcore/api/ivr-menu/{actionName}', 'post', '/'],
+
+            [ConferenceRoomsGetController::class, 'callAction', '/pbxcore/api/conference-rooms/{actionName}', 'get', '/'],
+            [ConferenceRoomsPostController::class, 'callAction', '/pbxcore/api/conference-rooms/{actionName}', 'post', '/'],
+
+            [DialplanApplicationsGetController::class, 'callAction', '/pbxcore/api/dialplan-applications/{actionName}', 'get', '/'],
+            [DialplanApplicationsPostController::class, 'callAction', '/pbxcore/api/dialplan-applications/{actionName}', 'post', '/'],
+
+            [UsersGetController::class, 'callAction', '/pbxcore/api/users/{actionName}', 'get', '/'],
+
+            [NchanGetController::class, 'callAction', '/pbxcore/api/nchan/{queueName}', 'get', '/'],
 
             [LicenseGetController::class, 'callAction', '/pbxcore/api/license/{actionName}', 'get', '/'],
             [LicensePostController::class, 'callAction', '/pbxcore/api/license/{actionName}', 'post', '/'],
 
+            // External modules actions
             [
                 ModulesControllerBase::class,
                 'callActionForModule',
@@ -160,6 +207,10 @@ class RouterProvider implements ServiceProviderInterface
                 'post',
                 '/',
             ],
+
+            // Module installation, upgrading, downloading, removing
+            [ModulesCoreGetController::class, 'callAction', '/pbxcore/api/modules/core/{actionName}', 'get', '/'],
+            [ModulesCorePostController::class, 'callAction', '/pbxcore/api/modules/core/{actionName}', 'post', '/'],
         ];
     }
 
@@ -196,4 +247,25 @@ class RouterProvider implements ServiceProviderInterface
         ];
     }
 
+    /**
+     * Attaches the modules hooks to the application
+     *
+     * @param Micro   $application
+     * @param Manager $eventsManager
+     */
+    private function attachModuleHooks(Micro $application, Manager $eventsManager): void
+    {
+        $eventsManager->attach(
+            "micro:beforeExecuteRoute",
+            function (Event $event, $app) {
+                PBXConfModulesProvider::hookModulesMethod(RestAPIConfigInterface::ON_BEFORE_EXECUTE_RESTAPI_ROUTE,[$app]);
+            }
+        );
+        $eventsManager->attach(
+            "micro:afterExecuteRoute",
+            function (Event $event, $app) {
+                PBXConfModulesProvider::hookModulesMethod(RestAPIConfigInterface::ON_AFTER_EXECUTE_RESTAPI_ROUTE,[$app]);
+            }
+        );
+    }
 }

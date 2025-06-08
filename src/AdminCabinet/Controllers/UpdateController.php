@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,15 +19,22 @@
 
 namespace MikoPBX\AdminCabinet\Controllers;
 
+use MikoPBX\Core\System\Util;
+
 class UpdateController extends BaseController
 {
 
     /**
-     * Обновление станции до нового релиза
+     * Display the update station page.
      *
      */
     public function indexAction(): void
     {
-        $this->view->submitMode = null;
+        $this->view->setVars(
+            [
+                'isDocker'=>Util::isDocker(),
+                'submitMode'=>null,
+            ]
+        );
     }
 }

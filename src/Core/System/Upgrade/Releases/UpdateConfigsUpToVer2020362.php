@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ use MikoPBX\Common\Models\Iax;
 use MikoPBX\Common\Models\IvrMenuActions;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Common\Models\SipHosts;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\System\Upgrade\UpgradeSystemConfigInterface;
-use MikoPBX\Core\System\Util;
 use Phalcon\Di\Injectable;
 use MikoPBX\Core\System\MikoPBXConfig;
 use Phalcon\Config as ConfigAlias;
@@ -78,7 +78,7 @@ class UpdateConfigsUpToVer2020362 extends Injectable implements UpgradeSystemCon
             $hostData->provider_id = $data->uniqid;
             $hostData->address = $data->host;
             if(!$hostData->save()){
-                Util::sysLogMsg(self::class, 'Error save SipHosts', LOG_ERR);
+                SystemMessages::sysLogMsg(self::class, 'Error save SipHosts', LOG_ERR);
             }
         }
     }

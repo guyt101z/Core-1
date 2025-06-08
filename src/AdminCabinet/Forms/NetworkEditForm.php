@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,52 +19,80 @@
 
 namespace MikoPBX\AdminCabinet\Forms;
 
+use MikoPBX\Common\Models\LanInterfaces;
+use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
+use MikoPBX\Common\Providers\TranslationProvider;
 use Phalcon\Forms\Element\Check;
 use Phalcon\Forms\Element\Hidden;
 use Phalcon\Forms\Element\Numeric;
 use Phalcon\Forms\Element\Select;
 use Phalcon\Forms\Element\Text;
-use Phalcon\Forms\Form;
 
 /**
  * Class NetworkEditForm
  *
  * @package MikoPBX\AdminCabinet\Forms
- * @property \MikoPBX\Common\Providers\TranslationProvider translation
+ * @property TranslationProvider translation
  */
-class NetworkEditForm extends Form
+class NetworkEditForm extends BaseForm
 {
     public function initialize($entity = null, $options = null): void
     {
+        parent::initialize($entity, $options);
+
         $arrRealInterfaces = [];
 
         $this->add(new Text('hostname'));
         $this->add(new Text('gateway', ['class' => 'ipaddress']));
         $this->add(new Text('primarydns', ['class' => 'ipaddress']));
         $this->add(new Text('secondarydns', ['class' => 'ipaddress']));
-        $this->add(new Text('extipaddr'));
-        $this->add(new Text('exthostname'));
+        $this->add(new Text('extipaddr', ['placeholder'=>'123.111.123.111']));
+        $this->add(new Text('exthostname', ['placeholder'=>'mikopbx.company.com']));
+        $this->add(new Numeric(PbxSettingsConstants::EXTERNAL_SIP_PORT,
+            [
+                'placeholder'=>PbxSettings::getDefaultArrayValues()[PbxSettingsConstants::EXTERNAL_SIP_PORT],
+                'style'=>'width:130px;',
+                'value'=>PbxSettings::getValueByKey(PbxSettingsConstants::EXTERNAL_SIP_PORT)
+            ]));
+        $this->add(new Numeric(PbxSettingsConstants::EXTERNAL_TLS_PORT,
+            [
+                'placeholder'=>PbxSettings::getDefaultArrayValues()[PbxSettingsConstants::EXTERNAL_TLS_PORT],
+                'style'=>'width:130px;',
+                'value'=>PbxSettings::getValueByKey(PbxSettingsConstants::EXTERNAL_TLS_PORT)
+            ]));
 
+        // topology
         $cheskArr = ['value' => null];
-        if ($entity->topology == 'private') {
+        if ($entity->topology == LanInterfaces::TOPOLOGY_PRIVATE) {
             $cheskArr = ['checked' => 'checked', 'value' => null];
         }
         $this->add(new Check('usenat', $cheskArr));
+
+         // AUTO_UPDATE_EXTERNAL_IP
+        $autoUpdateExternalIP = PbxSettings::getValueByKey(PbxSettingsConstants::AUTO_UPDATE_EXTERNAL_IP);
+        $cheskArr = ['value' => null];
+        if ($autoUpdateExternalIP == '1') {
+            $cheskArr = ['checked' => 'checked', 'value' => null];
+        }
+        $this->add(new Check(PbxSettingsConstants::AUTO_UPDATE_EXTERNAL_IP, $cheskArr));
+
+        // interfaces
         $arrInterfaces = [];
         foreach ($options['eths'] as $eth) {
             $this->add(
                 new Hidden(
                     'interface_' . $eth->id, [
-                    'value' => $eth->interface,
-                ]
+                        'value' => $eth->interface,
+                    ]
                 )
             );
 
             $this->add(
                 new Text(
                     'name_' . $eth->id, [
-                    'value' => $eth->name,
-                ]
+                        'value' => $eth->name,
+                    ]
                 )
             );
 
@@ -79,24 +107,24 @@ class NetworkEditForm extends Form
             $this->add(
                 new Text(
                     'ipaddr_' . $eth->id, [
-                    'value' => $eth->ipaddr,
-                    'class' => 'ipaddress',
-                ]
+                        'value' => $eth->ipaddr,
+                        'class' => 'ipaddress',
+                    ]
                 )
             );
 
-            // Выбор подсети интерфейса
+            // Makes subnet select
             $arrMasks = [
-                "0"  => "0 - 0.0.0.0",
-                "1"  => "1 - 128.0.0.0",
-                "2"  => "2 - 192.0.0.0",
-                "3"  => "3 - 224.0.0.0",
-                "4"  => "4 - 240.0.0.0",
-                "5"  => "5 - 248.0.0.0",
-                "6"  => "6 - 252.0.0.0",
-                "7"  => "7 - 254.0.0.0",
-                "8"  => "8 - 255.0.0.0",
-                "9"  => "9 - 255.128.0.0",
+                "0" => "0 - 0.0.0.0",
+                "1" => "1 - 128.0.0.0",
+                "2" => "2 - 192.0.0.0",
+                "3" => "3 - 224.0.0.0",
+                "4" => "4 - 240.0.0.0",
+                "5" => "5 - 248.0.0.0",
+                "6" => "6 - 252.0.0.0",
+                "7" => "7 - 254.0.0.0",
+                "8" => "8 - 255.0.0.0",
+                "9" => "9 - 255.128.0.0",
                 "10" => "10 - 255.192.0.0",
                 "11" => "11 - 255.224.0.0",
                 "12" => "12 - 255.240.0.0",
@@ -121,60 +149,61 @@ class NetworkEditForm extends Form
                 "31" => "31 - 255.255.255.254",
                 "32" => "32 - 255.255.255.255",
             ];
-            $mask     = new Select(
+            $mask = new Select(
                 'subnet_' . $eth->id, $arrMasks, [
-                'using'    => [
-                    'id',
-                    'name',
-                ],
-                'useEmpty' => false,
-                'value'    => $eth->subnet,
-                'class'    => 'ui search selection dropdown',
-            ]
+                    'using' => [
+                        'id',
+                        'name',
+                    ],
+                    'useEmpty' => false,
+                    'value' => $eth->subnet,
+                    'class' => 'ui search selection dropdown',
+                ]
             );
             $this->add($mask);
 
             $this->add(
                 new Numeric(
                     'vlanid_' . $eth->id, [
-                    'value' => $eth->vlanid,
-                ]
+                        'value' => $eth->vlanid,
+                    ]
                 )
             );
 
             $arrInterfaces[$eth->id] = $eth->name . ' (' . $eth->interface . (($eth->vlanid > 0) ? '.' . $eth->vlanid : '') . ')';
-            if ( ! in_array($eth->interface, $arrRealInterfaces)) {
+            if (!in_array($eth->interface, $arrRealInterfaces)) {
                 $arrRealInterfaces[$eth->id] = $eth->interface;
             }
         }
 
         unset($arrInterfaces['0']);
         unset($arrRealInterfaces['0']);
-        // Выбор интернет интерфейса
+
+        // Selector the internet interface
         $internetInterface = new Select(
             'internet_interface', $arrInterfaces, [
-            'using'    => [
-                'id',
-                'name',
-            ],
-            'useEmpty' => false,
-            'value'    => $entity->id,
-            'class'    => 'ui selection dropdown',
-        ]
+                'using' => [
+                    'id',
+                    'name',
+                ],
+                'useEmpty' => false,
+                'value' => $entity->id,
+                'class' => 'ui selection dropdown',
+            ]
         );
         $this->add($internetInterface);
 
 
-        // Поля для вновь добавляемого интерфейса
+        // Template for new lan
         $newInterface = new Select(
             'interface_0', $arrRealInterfaces, [
-            'using'    => [
-                'id',
-                'name',
-            ],
-            'useEmpty' => true,
-            'class'    => 'ui selection dropdown',
-        ]
+                'using' => [
+                    'id',
+                    'name',
+                ],
+                'useEmpty' => true,
+                'class' => 'ui selection dropdown',
+            ]
         );
         $this->add($newInterface);
     }

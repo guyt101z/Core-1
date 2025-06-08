@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,18 +20,66 @@
 namespace MikoPBX\Core\Asterisk\Configs;
 
 use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use MikoPBX\Core\System\Util;
 
-class ResParkingConf extends CoreConfigClass
+/**
+ * Class ResParkingConf
+ *
+ * Represents the res_parking.conf configuration file in Asterisk.
+ *
+ * @package MikoPBX\Core\Asterisk\Configs
+ */
+class ResParkingConf extends AsteriskConfigClass
 {
-    protected $ParkingExt;
-    protected $ParkingStartSlot;
-    protected $ParkingEndSlot;
+    // The module hook applying priority
+    public int $priority = 590;
 
+    /**
+     * Parking extension.
+     *
+     * @var string
+     */
+    protected string $ParkingExt;
+
+    /**
+     * Start slot for parking.
+     *
+     * @var string
+     */
+    protected string $ParkingStartSlot;
+
+    /**
+     * End slot for parking.
+     *
+     * @var string
+     */
+    protected string $ParkingEndSlot;
+
+    /**
+     * Parking feature.
+     *
+     * @var string
+     */
+    protected string $ParkingFeature;
+
+    /**
+     * Parking duration.
+     *
+     * @var string
+     */
+    protected string $ParkingDuration;
+
+    /**
+     * Description of the res_parking.conf file.
+     *
+     * @var string
+     */
 
     protected string $description = 'res_parking.conf';
 
     /**
+     * Get the dependence models.
      *
      * @return array
      */
@@ -42,41 +90,48 @@ class ResParkingConf extends CoreConfigClass
 
     /**
      * ResParkingConf constructor.
-     *
      */
     public function __construct(){
         parent::__construct();
-        // Вызов "getSettings" приемлем, так как идет работа с инициализированной переменной generalSettings.
         $this->getSettings();
     }
 
+    /**
+     * Generates the res_parking.conf configuration content and writes it to the file.
+     *
+     */
     protected function generateConfigProtected(): void
     {
-        // Генерация конфигурационных файлов.
-        $conf   = "[general] \n" .
-            "parkeddynamic = yes \n\n" .
-            "[default] \n" .
-            "context => parked-calls \n" .
-            "parkedcallreparking = caller\n" .
-            "parkedcalltransfers = caller\n" .
-            "parkext => {$this->ParkingExt} \n" .
-            "findslot => next\n" .
-            "comebacktoorigin=no\n" .
-            "comebackcontext = parked-calls-timeout\n" .
-            "parkpos => {$this->ParkingStartSlot}-{$this->ParkingEndSlot} \n\n";
+        // Generate the configuration content
+        $conf   = "[general]".PHP_EOL.
+            "parkeddynamic = yes".PHP_EOL.PHP_EOL.
+            "[default]".PHP_EOL.
+            "context => parked-calls".PHP_EOL.
+            "parkedcallreparking = caller".PHP_EOL.
+            "parkedcalltransfers = caller".PHP_EOL.
+            "parkext => $this->ParkingExt".PHP_EOL.
+            "findslot => next".PHP_EOL.
+            "comebacktoorigin=no".PHP_EOL.
+            "comebackcontext = parked-calls-timeout".PHP_EOL.
+            "parkpos => $this->ParkingStartSlot-$this->ParkingEndSlot".PHP_EOL.PHP_EOL;
+
+        // Write the configuration content to the file
         file_put_contents($this->config->path('asterisk.astetcdir') . '/res_parking.conf', $conf);
     }
 
-
     /**
-     * Функция позволяет получить активные каналы.
-     * Возвращает ассоциативный массив. Ключ - Linkedid, значение - массив каналов.
+     * Get the park slot data.
      *
-     * @param ?string $EXTEN
+     * Retrieves park slot data based on the provided extension.
+     * If the extension is null, it returns all park slot data.
      *
-     * @return null | array
+     * @param string|null $extension The extension to filter the park slot data. If null, returns all park slot data. Default is null.
+     *
+     * @return array|null An associative array representing the park slot data.
+     *
+     * @throws \Phalcon\Exception
      */
-    public static function getParkslotData(?string $EXTEN = null) : ?array
+    public static function getParkSlotData(?string $extension = null) : ?array
     {
         $ParkeeChannel = null;
         $am            = Util::getAstManager('off');
@@ -86,7 +141,7 @@ class ResParkingConf extends CoreConfigClass
         }
 
         foreach ($res['data']['ParkedCall'] as $park_row) {
-            if ($park_row['ParkingSpace'] === $EXTEN || $EXTEN === null) {
+            if ($park_row['ParkingSpace'] === $extension || $extension === null) {
                 $var_data                = $am->GetVar($park_row['ParkeeChannel'], 'pt1c_is_dst');
                 $park_row['pt1c_is_dst'] = ($var_data["Value"] === '1');
                 $ParkeeChannel           = $park_row;
@@ -97,49 +152,34 @@ class ResParkingConf extends CoreConfigClass
     }
 
     /**
-     * Получение настроек.
+     * Retrieve park slot settings.
+     *
+     * This method fetches park slot settings from the PbxSettings class and assigns them to the corresponding properties.
      */
     public function getSettings(): void
     {
-        $this->ParkingExt       = $this->generalSettings['PBXCallParkingExt'];
-        $this->ParkingStartSlot = (int)$this->generalSettings['PBXCallParkingStartSlot'];
-        $this->ParkingEndSlot   = (int)$this->generalSettings['PBXCallParkingEndSlot'];
+        $this->ParkingExt       = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_CALL_PARKING_EXT);
+        $this->ParkingFeature   = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_CALL_PARKING_FEATURE);
+        $this->ParkingDuration  = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_CALL_PARKING_DURATION);
+        $this->ParkingStartSlot = (int)PbxSettings::getValueByKey(PbxSettingsConstants::PBX_CALL_PARKING_START_SLOT);
+        $this->ParkingEndSlot   = (int)PbxSettings::getValueByKey(PbxSettingsConstants::PBX_CALL_PARKING_END_SLOT);
     }
 
     /**
-     * Возвращает включения в контекст internal
+     * Generate extension contexts.
      *
-     * @return string
-     */
-    public function getIncludeInternal(): string
-    {
-        return '';
-    }
-
-    /**
-     * Возвращает включения в контекст internal-transfer
+     * Generates the internal number plan for parked calls and returns it as a string.
      *
-     * @return string
-     */
-    public function getIncludeInternalTransfer(): string
-    {
-        // Генерация внутреннего номерного плана.
-        return 'exten => ' . $this->ParkingExt . ',1,Goto(parked-calls,${EXTEN},1)' . "\n";
-    }
-
-    /**
-     * Генерация дополнительных контекстов.
-     *
-     * @return string
+     * @return string The generated extension contexts for parked calls.
      */
     public function extensionGenContexts(): string
     {
-        // Генерация внутреннего номерного плана.
-        $conf = '';
-        $conf .= "[parked-calls]\n";
-        $conf .= "exten => _X!,1,AGI(cdr_connector.php,unpark_call)\n\t";
-        $conf .= 'same => n,ExecIf($["${pt1c_PARK_CHAN}x" == "x"]?Hangup())' . "\n\t";
-        $conf .= 'same => n,Bridge(${pt1c_PARK_CHAN},kKTt)' . "\n\t";
+        // Generate the internal number plan for parked calls.
+        $conf  = "[parked-calls]\n";
+        $conf .= "exten => _X!,2,NoOp()\n\t";
+        $conf .= 'same => n,AGI(cdr_connector.php,unpark_call)' . "\n\t";
+        $conf .= 'same => n,ExecIf($["${pt1c_PARK_CHAN}x" != "x"]?Bridge(${pt1c_PARK_CHAN},kKTt))' . "\n\t";
+        $conf .= 'same => n,ExecIf($["${pt1c_PARK_CHAN}x" == "x"]?ParkedCall(default,${EXTEN}))' . "\n\t";
         $conf .= 'same => n,Hangup()' . "\n\n";
 
         $conf .= "[parked-calls-timeout]\n";
@@ -153,15 +193,18 @@ class ResParkingConf extends CoreConfigClass
     }
 
     /**
-     * Возвращает номерной план для internal контекста.
+     * Generate internal extensions.
      *
-     * @return string
+     * Generates internal extensions for parked calls and returns them as a string.
+     *
+     * @return string The generated internal extensions for parked calls.
      */
     public function extensionGenInternal(): string
     {
         $conf = '';
+        // Generate internal extensions for the range of parking slots.
         for ($ext = $this->ParkingStartSlot; $ext <= $this->ParkingEndSlot; $ext++) {
-            $conf .= 'exten => ' . $ext . ',1,Goto(parked-calls,${EXTEN},1)' . "\n";
+            $conf .= 'exten => ' . $ext . ',1,Goto(parked-calls,${EXTEN},2)' . "\n";
         }
         $conf .= "\n";
 
@@ -169,22 +212,43 @@ class ResParkingConf extends CoreConfigClass
     }
 
     /**
-     * Дополнительные параметры для секции global.
+     * Get the include for internal transfer.
      *
-     * @return string
+     * Generates the include for internal transfers based on the configured ParkingExt and returns it as a string.
+     *
+     * @return string The generated include for internal transfer.
      */
-    public function extensionGlobals(): string
+    public function getIncludeInternalTransfer(): string
     {
-        return "PARKING_DURATION=50\n";
+        if(empty($this->ParkingExt)){
+            $conf = '';
+        }else{
+            $conf = 'exten => ' . $this->ParkingExt . ',1,Goto(parked-calls,${EXTEN},1)' . PHP_EOL;
+        }
+        return $conf;
     }
 
     /**
-     * Дополнительные коды feature.conf
+     * Generate extension globals.
      *
-     * @return string
+     * Generates extension globals based on the configured ParkingDuration and returns them as a string.
+     *
+     * @return string The generated extension globals.
+     */
+    public function extensionGlobals(): string
+    {
+        return "PARKING_DURATION=$this->ParkingDuration".PHP_EOL;
+    }
+
+    /**
+     * Get the feature map for feature.conf
+     *
+     * Generates the feature map based on the configured ParkingFeature and returns it as a string.
+     *
+     * @return string The generated feature map.
      */
     public function getFeatureMap(): string
     {
-        return "parkcall => *2 \n";
+        return "parkcall => $this->ParkingFeature".PHP_EOL;
     }
 }

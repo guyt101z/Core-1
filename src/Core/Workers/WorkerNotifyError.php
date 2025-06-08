@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,110 +19,56 @@
 
 namespace MikoPBX\Core\Workers;
 require_once 'Globals.php';
-use MikoPBX\Core\System\{BeanstalkClient, MikoPBXConfig, Notifications, Util};
+
+use MikoPBX\Common\Handlers\CriticalErrorsHandler;
+use MikoPBX\Common\Providers\ManagedCacheProvider;
+use MikoPBX\Common\Providers\PBXCoreRESTClientProvider;
+use MikoPBX\Core\System\Notifications;
+use Phalcon\Di;
 use Throwable;
 
+/**
+ * WorkerNotifyError is a worker class responsible for checking the significant advice messages and sent it to system administrator.
+ *
+ * @package MikoPBX\Core\Workers
+ */
 class WorkerNotifyError extends WorkerBase
 {
-    private array $queue = [];
-    private int $starting_point = 0;
-    private int $interval = 28800;
-
     /**
-     * Наполняем очередь уведомлениями.
+     * Starts the errors notifier worker.
      *
-     * @param $argv
+     * @param array $argv The command-line arguments passed to the worker.
+     * @return void
      */
-    public function start($argv): void
+    public function start(array $argv): void
     {
+        $cacheKey = 'Workers:WorkerNotifyError:lastErrorsCheck';
+        $managedCache = $this->di->get(ManagedCacheProvider::SERVICE_NAME);
 
-        $client = new BeanstalkClient('WorkerNotifyError_license');
-        $client->subscribe('WorkerNotifyError_license', [$this, 'onLicenseError']);
-        $client->subscribe('WorkerNotifyError_storage', [$this, 'onStorageError']);
-        $client->subscribe($this->makePingTubeName(self::class), [$this, 'pingCallBack']);
-
-        while ($this->needRestart === false) {
-            $client->wait();
-        }
-    }
-
-    /**
-     * Обработчик пинга. Тут же проверка необходимости оповещения.
-     *
-     * @param BeanstalkClient $message
-     */
-    public function pingCallBack($message): void
-    {
-        parent::pingCallBack($message);
-        if (count($this->queue) > 0 && (time() - $this->starting_point) > $this->interval) {
-            $this->sendNotify();
-            $this->starting_point = time();
-            $this->queue          = [];
-        }
-    }
-
-    /**
-     * Отправка уведомления об ошибке лицензии.
-     */
-    private function sendNotify()
-    {
-        $config = new MikoPBXConfig();
-        $to     = $config->getGeneralSettings('SystemNotificationsEmail');
-        if (empty($to)) {
-            return;
-        }
-        $test_email = '';
-        foreach ($this->queue as $text_error => $section) {
-            if (empty($text_error)) {
-                continue;
-            }
-            if (Util::isJson($text_error)) {
-                $data       = json_decode($text_error, true);
-                $test_email .= "<hr>";
-                $test_email .= "{$section}";
-                $test_email .= "<hr>";
-                foreach ($data as $key => $value) {
-                    $test_email .= "{$key}: {$value}<br>";
+        // Retrieve the last error check timestamp from the cache
+        $lastErrorsCheck = $managedCache->get($cacheKey);
+        if ($lastErrorsCheck === null) {
+            try {
+                // Get user data from the API
+                $di = Di::getDefault();
+                $restResponse = $di->get(PBXCoreRESTClientProvider::SERVICE_NAME, [
+                    '/pbxcore/api/advice/getList',
+                    PBXCoreRESTClientProvider::HTTP_METHOD_GET
+                ]);
+                $errorMessages = $restResponse->data['advice']['error'] ?? [];
+                if ($restResponse->success and $errorMessages !== []) {
+                    Notifications::sendAdminNotification('adv_ThereIsSomeTroublesWithMikoPBX', $errorMessages);
                 }
-                $test_email .= "<hr>";
-            } else {
-                $test_email .= "$text_error <br>";
+                // Store the current timestamp in the cache to track the last error check
+                $managedCache->set($cacheKey, time(), 3600); // Check every hour
+            } catch (Throwable $exception) {
+                CriticalErrorsHandler::handleExceptionWithSyslog($exception);
             }
         }
 
-        $notifier = new Notifications();
-        $notifier->sendMail($to, 'Askozia Errors', $test_email);
-    }
-
-    /**
-     * @param BeanstalkClient $message $message
-     */
-    public function onLicenseError($message)
-    {
-        $body = $message->getBody();
-        if (empty($body)) {
-            return;
-        }
-        // Наполняем массив уникальными даными.
-        $this->queue[$body] = 'License error:';
-    }
-
-    /**
-     * @param BeanstalkClient $message $message
-     */
-    public function onStorageError($message)
-    {
-        $body = $message->getBody();
-        if (empty($body)) {
-            return;
-        }
-        $mail_body = trim($body);
-        // Наполняем массив уникальными даными.
-        $this->queue[$mail_body] = 'Storage error:';
     }
 
 }
 
-
-// Start worker process
-WorkerNotifyError::startWorker($argv??null);
+// Start a worker process
+WorkerNotifyError::startWorker($argv ?? []);

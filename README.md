@@ -43,7 +43,7 @@ A big thank you to [our Backers](https://github.com/mikopbx/Core/blob/master/BAC
 ## Getting Started
 1. Download [latest released](https://github.com/mikopbx/Core/releases/latest) ISO file in assets section
 2. Create a new virtual machine (e.g. VMware Player)
-3. Select **Other Linux 4.x kernel 64-bit** on the virtual machine settings
+3. Select **Other Linux 6.6.1 kernel 64-bit** on the virtual machine settings
 4. Boot from ISO firmware and install MikoPBX on storage according to internal instructions.
 5. Continue set up your PBX system over a web interface with default credentials. Username: *admin*  password: *admin*
 
@@ -54,7 +54,7 @@ Or follow our wiki for [additional instructions](https://wiki.mikopbx.com/en:set
 * Easy to install and easy to setup.
 * Multilingual interface with community-supported translation service.
 * Wiki documentation with context helpers on the web interface.
-* Latest PJSIP stack and Asterisk LTS 16 release installed.
+* Latest PJSIP stack and Asterisk LTS 20 release installed.
 * Fail2Ban and iptables already included.
 * Modular architecture.
 * Plugins marketplace.
@@ -67,7 +67,7 @@ Concurrent calls | Minimum recommended
 ------------ | -------------
 5 to 10 | 1 GHz x86-64, 512 MB RAM
 Up to 25 | 3 GHz x86-64, 1 GB RAM
-More than 25 | Dual CPUs 3 GHz x86-64, 2 MB RAM or more
+More than 25 | Dual CPUs 3 GHz x86-64, 2 GB RAM or more
 
 ## How to modify your system
 For some easy customisations, you can use a dialplan application point on a menu. The *dialplan applications* supports PHP-AGI or Asterisk Dialplan language.
@@ -109,7 +109,7 @@ Become a sponsor and get your logo on our README on Github with a link to your s
 
 ## License
 MikoPBX© - free phone system for small business
-Copyright © 2017-2021 Alexey Portnov and Nikolay Beketov
+Copyright © 2017-2024 Alexey Portnov and Nikolay Beketov
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ require_once __DIR__.'/../TestCallsBase.php';
 $sampleCDR   = [];
 $sampleCDR[] = ['src_num'=>'aNum', 'dst_num'=>'bNum', 'duration'=>'11', 'billsec'=>'10', 'fileDuration' => '6'];
 $sampleCDR[] = ['src_num'=>'bNum', 'dst_num'=>'cNum', 'duration'=>'3',  'billsec'=>'2',  'fileDuration' => '2'];
-$sampleCDR[] = ['src_num'=>'aNum', 'dst_num'=>'cNum', 'duration'=>'6',  'billsec'=>'6',  'fileDuration' => '5'];
+$sampleCDR[] = ['src_num'=>'aNum', 'dst_num'=>'cNum', 'duration'=>'5',  'billsec'=>'5',  'fileDuration' => '5'];
 
 $testName = basename(__DIR__);
 $test = new TestCallsBase();

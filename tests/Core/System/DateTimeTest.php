@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,12 @@
 
 namespace MikoPBX\Tests\Core\System;
 
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use MikoPBX\Core\System\Configs\PHPConf;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Tests\Unit\AbstractUnitTest;
 
-class DateTimeTest extends AbstractUnitTste
+class DateTimeTest extends \MikoPBX\Tests\Unit\AbstractUnitTest
 {
 
     public function testSetDate()
@@ -33,7 +34,7 @@ class DateTimeTest extends AbstractUnitTste
     public function testTimezoneConfigure()
     {
         $mikoPBXConfig = new MikoPBXConfig();
-        $timezone      = $mikoPBXConfig->getGeneralSettings('PBXTimezone');
+        $timezone      = $mikoPBXConfig->getGeneralSettings(PbxSettingsConstants::PBX_TIMEZONE);
         PHPConf::phpTimeZoneConfigure();
         $etcPhpIniPath = '/etc/php.ini';
         $contents = file_get_contents($etcPhpIniPath);

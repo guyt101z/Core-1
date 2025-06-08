@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,8 @@ use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Common\Providers\MainDatabaseProvider;
 use MikoPBX\Common\Providers\ModelsAnnotationsProvider;
 use MikoPBX\Common\Providers\ModelsMetadataProvider;
+use MikoPBX\Core\System\Processes;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\System\Util;
 use Phalcon\Db\Column;
 use Phalcon\Db\Index;
@@ -37,8 +39,10 @@ use function MikoPBX\Common\Config\appPath;
 /**
  * Class UpdateDatabase
  *
- * @package MikoPBX\Core\System\Upgrade
+ *
  * @property \Phalcon\Config config
+ *
+ *  @package MikoPBX\Core\System\Upgrade
  */
 class UpdateDatabase extends Di\Injectable
 {
@@ -53,7 +57,7 @@ class UpdateDatabase extends Di\Injectable
             $this->updateDbStructureByModelsAnnotations();
             MainDatabaseProvider::recreateDBConnections(); // if we change anything in structure
         } catch (Throwable $e) {
-            Util::echoWithSyslog('Errors within database upgrade process '.$e->getMessage());
+            SystemMessages::echoWithSyslog('Errors within database upgrade process '.$e->getMessage());
         }
     }
 
@@ -73,9 +77,33 @@ class UpdateDatabase extends Di\Injectable
             try {
                 $this->createUpdateDbTableByAnnotations($moduleModelClass);
             } catch (Throwable $exception){
-                Util::echoWithSyslog('Errors within update table '.$className.' '.$exception->getMessage());
+                // Log errors encountered during table update
+                SystemMessages::echoWithSyslog('Errors within update table '.$className.' '.$exception->getMessage());
             }
         }
+
+        // Update permissions for custom modules
+        $this->updatePermitCustomModules();
+    }
+
+    /**
+     * Update the permissions for custom modules.
+     * https://github.com/mikopbx/Core/issues/173
+     *
+     * @return void
+     */
+    private function updatePermitCustomModules():void
+    {
+        $modulesDir = $this->config->path('core.modulesDir');
+        $findPath  = Util::which('find');
+        $chownPath = Util::which('chown');
+        $chmodPath = Util::which('chmod');
+
+        // Set execute permissions for files in the modules' binary directories
+        Processes::mwExec("$findPath $modulesDir/*/*bin/ -type f -exec {$chmodPath} +x {} \;");
+
+        // Set ownership of the modules directory to www:www
+        Processes::mwExec("$chownPath -R www:www $modulesDir/*");
     }
 
     /**
@@ -89,12 +117,16 @@ class UpdateDatabase extends Di\Injectable
     public function createUpdateDbTableByAnnotations(string $modelClassName): bool
     {
         $result = true;
+
+        // Check if the model class exists and has properties
         if (
             ! class_exists($modelClassName)
             || count(get_class_vars($modelClassName)) === 0) {
             return true;
         }
-        // Test is abstract
+
+
+        // Test if the model class is abstract
         try {
             $reflection = new ReflectionClass($modelClassName);
             if ($reflection->isAbstract()) {
@@ -103,18 +135,28 @@ class UpdateDatabase extends Di\Injectable
         } catch (Throwable $exception) {
             return false;
         }
+
+        // Get the model instance
         $model                 = new $modelClassName();
+
+        // Get the connection service name
         $connectionServiceName = $model->getReadConnectionService();
+
+        // Check if the connection service name is empty
         if (empty($connectionServiceName)) {
             return false;
         }
 
+        // Get the connection service and metadata provider
         $connectionService = $this->di->getShared($connectionServiceName);
         $metaData          = $this->di->get(ModelsMetadataProvider::SERVICE_NAME);
+        $metaData->reset();
 
+        // Get the model annotations
         //https://docs.phalcon.io/4.0/ru-ru/annotations
         $modelAnnotation = $this->di->get(ModelsAnnotationsProvider::SERVICE_NAME)->get($model);
 
+        // Initialize table name, structure and indexes
         $tableName       = $model->getSource();
         $table_structure = [];
         $indexes         = [];
@@ -153,14 +195,14 @@ class UpdateDatabase extends Di\Injectable
             }
         }
 
-        // For each numeric column change type
+        // Change type for numeric columns
         $numericAttributes = $metaData->getDataTypesNumeric($model);
         foreach ($numericAttributes as $attribute => $value) {
             $table_structure[$attribute]['type']      = Column::TYPE_INTEGER;
             $table_structure[$attribute]['isNumeric'] = true;
         }
 
-        // For each not nullable column change type
+        // Set not null for columns
         $notNull = $metaData->getNotNullAttributes($model);
         foreach ($notNull as $attribute) {
             $table_structure[$attribute]['notNull'] = true;
@@ -236,23 +278,31 @@ class UpdateDatabase extends Di\Injectable
             'indexes' => $indexes,
         ];
 
+        // Let's describe the directory for storing temporary tables and data
+        $tempDir = $this->di->getShared('config')->path('core.tempDir');
+        $sqliteTempStore = $connectionService->fetchColumn('PRAGMA temp_store');
+        $sqliteTempDir   = $connectionService->fetchColumn('PRAGMA temp_store_directory');
+        $connectionService->execute('PRAGMA temp_store = FILE;');
+        $connectionService->execute("PRAGMA temp_store_directory = '$tempDir';");
+
+        // Starting the transaction
         $connectionService->begin();
 
         if ( ! $connectionService->tableExists($tableName)) {
             $msg = ' - UpdateDatabase: Create new table: ' . $tableName . ' ';
-            Util::echoWithSyslog($msg);
+            SystemMessages::echoWithSyslog($msg);
             $result = $connectionService->createTable($tableName, '', $columnsNew);
-            Util::echoResult($msg);
+            SystemMessages::echoResult($msg);
         } else {
             // Table exists, we have to check/upgrade its structure
             $currentColumnsArr = $connectionService->describeColumns($tableName, '');
 
             if ($this->isTableStructureNotEqual($currentColumnsArr, $columns)) {
                 $msg = ' - UpdateDatabase: Upgrade table: ' . $tableName . ' ';
-                Util::echoWithSyslog($msg);
+                SystemMessages::echoWithSyslog($msg);
                 // Create new table and copy all data
                 $currentStateColumnList = [];
-                $oldColNames            = []; // Старые названия колонок
+                $oldColNames            = []; // Old columns names
                 $countColumnsTemp       = count($currentColumnsArr);
                 for ($k = 0; $k < $countColumnsTemp; $k++) {
                     $currentStateColumnList[$k] = $currentColumnsArr[$k]->getName();
@@ -279,7 +329,7 @@ DROP TABLE  {$tableName}";
 
                 // Drop temporary table
                 $result = $result && $connectionService->execute("DROP TABLE {$tableName}_backup;");
-                Util::echoResult($msg);
+                SystemMessages::echoResult($msg);
             }
         }
 
@@ -291,10 +341,13 @@ DROP TABLE  {$tableName}";
         if ($result) {
             $result = $connectionService->commit();
         } else {
-            Util::sysLogMsg('createUpdateDbTableByAnnotations', "Error: Failed on create/update table {$tableName}", LOG_ERR);
+            SystemMessages::sysLogMsg('createUpdateDbTableByAnnotations', "Error: Failed on create/update table {$tableName}", LOG_ERR);
             $connectionService->rollback();
         }
 
+        // Restoring PRAGMA values
+        $connectionService->execute("PRAGMA temp_store = $sqliteTempStore;");
+        $connectionService->execute("PRAGMA temp_store_directory = '$sqliteTempDir';");
         return $result;
     }
 
@@ -378,9 +431,9 @@ DROP TABLE  {$tableName}";
                 && ! array_key_exists($indexName, $indexes)
             ) {
                 $msg = " - UpdateDatabase: Delete index: {$indexName} ";
-                Util::echoWithSyslog($msg);
+                SystemMessages::echoWithSyslog($msg);
                 $result += $connectionService->dropIndex($tableName, '', $indexName);
-                Util::echoResult($msg);
+                SystemMessages::echoResult($msg);
             }
         }
 
@@ -390,16 +443,16 @@ DROP TABLE  {$tableName}";
                 $currentIndex = $currentIndexes[$indexName];
                 if ($describedIndex->getColumns() !== $currentIndex->getColumns()) {
                     $msg = " - UpdateDatabase: Update index: {$indexName} ";
-                    Util::echoWithSyslog($msg);
+                    SystemMessages::echoWithSyslog($msg);
                     $result += $connectionService->dropIndex($tableName, '', $indexName);
                     $result += $connectionService->addIndex($tableName, '', $describedIndex);
-                    Util::echoResult($msg);
+                    SystemMessages::echoResult($msg);
                 }
             } else {
                 $msg = " - UpdateDatabase: Add new index: {$indexName} ";
-                Util::echoWithSyslog($msg);
+                SystemMessages::echoWithSyslog($msg);
                 $result += $connectionService->addIndex($tableName, '', $describedIndex);
-                Util::echoResult($msg);
+                SystemMessages::echoResult($msg);
             }
         }
 

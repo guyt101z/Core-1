@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,16 +28,19 @@ use Phalcon\Storage\SerializerFactory;
 
 
 /**
- * Main database connection is created based in the parameters defined in the configuration file
+ * The ManagedCacheProvider class is responsible for registering the managedCache service.
+ *
+ * @package MikoPBX\Common\Providers
  */
 class ManagedCacheProvider implements ServiceProviderInterface
 {
     public const SERVICE_NAME = 'managedCache';
+    public const CACHE_PREFIX = 'managed-cache:';
 
     /**
-     * Register managedCache service provider
+     * Register the managedCache service provider.
      *
-     * @param \Phalcon\Di\DiInterface $di
+     * @param DiInterface $di The DI container.
      */
     public function register(DiInterface $di): void
     {
@@ -53,7 +56,7 @@ class ManagedCacheProvider implements ServiceProviderInterface
                     'host'              => $config->path('redis.host'),
                     'port'              => $config->path('redis.port'),
                     'index'             => 4,
-                    'prefix'            => 'managed-cache'
+                    'prefix'            => self::CACHE_PREFIX
                 ];
 
                 return new Redis($serializerFactory, $options);

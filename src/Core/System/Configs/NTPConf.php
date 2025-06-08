@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,18 +19,28 @@
 namespace MikoPBX\Core\System\Configs;
 
 use MikoPBX\Common\Models\PbxSettings;
+use MikoPBX\Common\Models\PbxSettingsConstants;
 use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\Util;
 use Phalcon\Di\Injectable;
 
+/**
+ * Class NTPConf
+ *
+ * Represents the NTP configuration.
+ *
+ * @package MikoPBX\Core\System\Configs
+ */
 class NTPConf extends Injectable
 {
     /**
-     * Setup ntp daemon conf file
+     * Configures the NTP daemon conf file.
+     *
+     * @return void
      */
     public static function configure(): void
     {
-        $ntp_servers = PbxSettings::getValueByKey('NTPServer');
+        $ntp_servers = PbxSettings::getValueByKey(PbxSettingsConstants::NTP_SERVER);
         $ntp_servers = preg_split('/\r\n|\r|\n| /', $ntp_servers);
         $ntp_conf = '';
         foreach ($ntp_servers as $ntp_server){
@@ -48,12 +58,14 @@ server 2.pool.ntp.org';
             $systemctlPath = Util::which('systemctl');
             Processes::mwExec("{$systemctlPath} restart ntp");
         } else {
+            // T2SDE or Docker
             Processes::killByName("ntpd");
             usleep(500000);
-            $manual_time = PbxSettings::getValueByKey('PBXManualTimeSettings');
+            $manual_time = PbxSettings::getValueByKey(PbxSettingsConstants::PBX_MANUAL_TIME_SETTINGS);
             if ($manual_time !== '1') {
                 $ntpdPath = Util::which('ntpd');
                 Processes::mwExec($ntpdPath);
+                Processes::mwExecBg("$ntpdPath -q");
             }
         }
     }

@@ -16,7 +16,7 @@
     </div>
 </div>
 <div class="ui hidden divider"></div>
-<table id="cdr-table" class="ui small very compact single line table">
+<table id="cdr-table" class="ui small very compact single line unstackable table ">
     <thead>
     <tr>
         <th class="one wide"></th>
@@ -27,4 +27,8 @@
     </tr>
     </thead>
     <tbody>
+    <tr>
+        <td colspan="5" class="dataTables_empty">{{ t._('dt_TableIsEmpty') }}</td>
+    </tr>
+    </tbody>
 </table>

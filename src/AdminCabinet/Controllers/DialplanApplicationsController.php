@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ class DialplanApplicationsController extends BaseController
         $app = DialplanApplications::findFirstByUniqid($uniqid);
         if ($app === null) {
             $app            = new DialplanApplications();
-            $app->uniqid    = strtoupper('DIALPLAN-APP-' . md5($app->id . time()));
+            $app->uniqid    = DialplanApplications::generateUniqueID('DIALPLAN-APP-');
             $app->type      = 'php';
             $app->extension = Extensions::getNextFreeApplicationNumber();
         }
@@ -171,36 +171,4 @@ class DialplanApplicationsController extends BaseController
         return true;
     }
 
-    /**
-     * Deletes DialplanApplications from database
-     *
-     * @param string $uniqid Dialplan Application record ID
-     */
-    public function deleteAction(string $uniqid = ''):void
-    {
-        if ($uniqid === '') {
-            return;
-        }
-
-        $appRecord = DialplanApplications::findFirstByUniqid($uniqid);
-        if ($appRecord === null) {
-            return;
-        }
-
-        $this->db->begin();
-        $errors = false;
-        $extension = $appRecord->Extensions;
-        if ( ! $extension->delete()) {
-            $errors = $extension->getMessages();
-        }
-
-        if ($errors) {
-            $this->flash->warning(implode('<br>', $errors));
-            $this->db->rollback();
-        } else {
-            $this->db->commit();
-        }
-
-        $this->forward('dialplan-applications/index');
-    }
 }

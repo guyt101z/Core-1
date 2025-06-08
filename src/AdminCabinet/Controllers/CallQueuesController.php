@@ -1,7 +1,7 @@
 <?php
 /*
  * MikoPBX - free phone system for small business
- * Copyright (C) 2017-2020 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,9 +61,10 @@ class CallQueuesController extends BaseController
     }
 
     /**
-     * Карточка редактирования очереди
+     * Modify the call queue action.
      *
-     * @param string $uniqid - идентификатор редактируемой очереди
+     * @param string $uniqid (optional) The identifier of the queue being modified.
+     * @return void
      */
     public function modifyAction(string $uniqid = ''): void
     {
@@ -75,14 +76,14 @@ class CallQueuesController extends BaseController
             $queue                              = new CallQueues();
             $queue->uniqid                      = Extensions::TYPE_QUEUE . strtoupper('-' . md5($queue->id . time()));
             $queue->caller_hear                 = 'moh';
-            $queue->seconds_to_ring_each_member = 20;
-            $queue->seconds_for_wrapup          = 15;
-            $queue->announce_position           = 1;
-            $queue->announce_hold_time          = 1;
-            $queue->periodic_announce_frequency = 45;
+            $queue->seconds_to_ring_each_member = 60;
+            $queue->seconds_for_wrapup          = 1;
+            $queue->announce_position           = 0;
+            $queue->announce_hold_time          = 0;
+            $queue->periodic_announce_frequency = 30;
             $queue->extension                   = Extensions::getNextFreeApplicationNumber();
         } else {
-            // Списк экстеншенов очереди
+            // Queue extension list
             $parameters = [
                 'conditions' => 'queue=:queue:',
                 'bind'       => [
@@ -102,7 +103,7 @@ class CallQueuesController extends BaseController
         }
 
         $extensionList[""] = $this->translation->_("ex_SelectNumber");
-        // Список всех используемых эктеншенов
+        // List of all used extensions
         $parameters = [
             'conditions' => 'number IN ({ids:array})',
             'bind'       => [
@@ -119,18 +120,25 @@ class CallQueuesController extends BaseController
             $extensionList[$record->number] = $record->getRepresent();
         }
 
-        // Список звуковых файлов для очередей
+        // List of sound files for queues
         $soundfilesList[""] = $this->translation->_("sf_SelectAudioFile");
         $soundfilesList[-1] = '-';
-        $soundFiles         = SoundFiles::find('category="custom"');
+        $mohSoundFilesList  = $soundfilesList;
+
+        $soundFiles         = SoundFiles::find(['columns' => 'id,name,category']);
         foreach ($soundFiles as $soundFile) {
-            $soundfilesList[$soundFile->id] = $soundFile->name;
+            if(SoundFiles::CATEGORY_CUSTOM === $soundFile->category){
+                $soundfilesList[$soundFile->id] = $soundFile->name;
+            }else{
+                $mohSoundFilesList[$soundFile->id] = $soundFile->name;
+            }
         }
 
         $form                        = new CallQueueEditForm(
             $queue, [
                       'extensions' => $extensionList,
                       'soundfiles' => $soundfilesList,
+                      'mohSoundFiles' => $mohSoundFilesList,
                   ]
         );
         $this->view->form            = $form;
@@ -141,7 +149,11 @@ class CallQueuesController extends BaseController
 
 
     /**
-     * Сохранение очереди через AJAX запрос из формы
+     * Save the queue via AJAX request from the form.
+     *
+     * This method saves the queue by processing an AJAX request from the form.
+     *
+     * @return void
      */
     public function saveAction(): void
     {
@@ -165,7 +177,7 @@ class CallQueuesController extends BaseController
             $extension = $queue->Extensions;
         }
 
-        // Заполним параметры внутреннего номера
+        // Update the extension parameters
         if ( ! $this->updateExtension($extension, $data)) {
             $this->view->success = false;
             $this->db->rollback();
@@ -173,7 +185,7 @@ class CallQueuesController extends BaseController
             return;
         }
 
-        // Заполним параметры пользователя
+        // Update the queue parameters
         if ( ! $this->updateQueue($queue, $data)) {
             $this->view->success = false;
             $this->db->rollback();
@@ -181,7 +193,7 @@ class CallQueuesController extends BaseController
             return;
         }
 
-        // Заполним параметры участников очереди
+        // Update the queue members
         if ( ! $this->updateQueueMembers($data)) {
             $this->view->success = false;
             $this->db->rollback();
@@ -193,19 +205,21 @@ class CallQueuesController extends BaseController
         $this->view->success = true;
         $this->db->commit();
 
-        // Если это было создание карточки то надо перегрузить страницу с указанием ID
+        // If it was a new queue card, reload the page with the specified ID
         if (empty($data['id'])) {
             $this->view->reload = "call-queues/modify/{$data['uniqid']}";
         }
     }
 
     /**
-     * Обновление параметров внутреннего номера
+     * Update the extension parameters.
      *
-     * @param \MikoPBX\Common\Models\Extensions $extension
-     * @param array                             $data массив полей из POST запроса
+     * This method updates the parameters of the internal extension.
      *
-     * @return bool update result
+     * @param \MikoPBX\Common\Models\Extensions $extension The extension object to update.
+     * @param array                             $data      The array of fields from the POST request.
+     *
+     * @return bool The update result. Returns true if the update is successful, false otherwise.
      */
     private function updateExtension(Extensions $extension, array $data): bool
     {
@@ -222,12 +236,14 @@ class CallQueuesController extends BaseController
     }
 
     /**
-     * Обновление параметров очереди
+     * Update queue parameters.
      *
-     * @param \MikoPBX\Common\Models\CallQueues $queue
-     * @param array                             $data массив полей из POST запроса
+     * This method updates the parameters of a queue.
      *
-     * @return bool update result
+     * @param \MikoPBX\Common\Models\CallQueues $queue The queue object to update.
+     * @param array                             $data  The array of fields from the POST request.
+     *
+     * @return bool The update result. Returns true if the update is successful, false otherwise.
      */
     private function updateQueue(CallQueues $queue, array $data): bool
     {
@@ -248,6 +264,7 @@ class CallQueuesController extends BaseController
                     break;
 
                 case "periodic_announce_sound_id":
+                case "moh_sound_id":
                 case "redirect_to_extension_if_repeat_exceeded":
                 case "redirect_to_extension_if_empty":
                     if ( ! array_key_exists($name, $data) || empty($data[$name])) {
@@ -309,16 +326,15 @@ class CallQueuesController extends BaseController
     }
 
     /**
-     * Обновление списка участников очереди
+     * Update the queue members with the provided data.
      *
-     * @param array $data массив полей из POST запроса
-     *
-     * @return bool update result
+     * @param array $data The data containing the queue members information.
+     * @return bool True if the update is successful, false otherwise.
      */
     private function updateQueueMembers(array $data): bool
     {
         $realMembers = [];
-        // Обновим настройки у существующих членов очереди
+        // Update settings for existing queue members
         $membersTable = json_decode($data['members']);
         foreach ($membersTable as $member) {
             $parameters   = [
@@ -330,7 +346,7 @@ class CallQueuesController extends BaseController
             ];
             $queueMembers = CallQueueMembers::find($parameters);
             if (is_countable($queueMembers) && count($queueMembers) > 1) {
-                // откуда то взались лишние. Надо их всех удалить и создать нового
+                // Remove extra members and create a new one
                 if ($queueMembers->delete() === false) {
                     $errors = $queueMembers->getMessages();
                     $this->flash->error(implode('<br>', $errors));
@@ -356,7 +372,7 @@ class CallQueuesController extends BaseController
             }
         }
 
-        // Удалим членов очереди которх нет в списке
+        // Remove queue members not present in the list
         $parameters = [
             'conditions' => 'extension NOT IN  ({numbers:array}) AND queue=:uniqid:',
             'bind'       => [
@@ -376,35 +392,4 @@ class CallQueuesController extends BaseController
         return true;
     }
 
-    /**
-     * Удаление очереди по ее ID
-     *
-     * @param string $uniqid
-     */
-    public function deleteAction(string $uniqid = ''): void
-    {
-        if ($uniqid === '') {
-            return;
-        }
-
-        $queue = CallQueues::findFirstByUniqid($uniqid);
-        if ($queue === null) {
-            return;
-        }
-        $errors = false;
-
-        $this->db->begin();
-        $extension = $queue->Extensions;
-        if ( ! $extension->delete()) {
-            $errors = $extension->getMessages();
-        }
-        if ($errors) {
-            $this->flash->warning(implode('<br>', $errors));
-            $this->db->rollback();
-        } else {
-            $this->db->commit();
-        }
-
-        $this->forward('call-queues/index');
-    }
 }
